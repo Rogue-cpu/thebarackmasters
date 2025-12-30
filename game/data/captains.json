@@ -1,0 +1,37 @@
+{
+  "servos": [
+    "Admiral Lysara",
+    "Commander Veyl",
+    "Captain Ardent",
+    "Strategist Miro",
+    "Curator Elos"
+  ],
+  "interceptor": [
+    "Wingmaster Kale",
+    "Aer Marshal Bryn",
+    "Captain Seret",
+    "Skyrider Nesh",
+    "Courier Plen"
+  ],
+  "corvette": [
+    "Commodore Rax",
+    "Captain Helian",
+    "Warden Jexa",
+    "Centurion Drav",
+    "Patrol Lead Orin"
+  ],
+  "cruiser": [
+    "Flagbearer Sola",
+    "Adjudicator Torm",
+    "Captain Valea",
+    "Marshal Krohn",
+    "Custodian Relle"
+  ],
+  "default": [
+    "Captain Nova",
+    "Commander Alys",
+    "Captain Thorn",
+    "Legate Myr",
+    "Captain Vorn"
+  ]
+}

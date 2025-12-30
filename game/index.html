@@ -1,0 +1,90 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>Ur-Quan Super Melee — Demo</title>
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+  <div id="ui">
+    <h1>Ur-Quan Super Melee — Demo</h1>
+    <div class="control-bar">
+      <button id="start">Start Battle</button>
+      <button id="reset">Reset</button>
+    </div>
+    <!-- Player panel -->
+    <div id="player-panel" class="side-panel">
+      <div class="panel-title"><span id="player-race-label">Servos</span></div>
+      <div class="ship-display">
+        <div class="metric-stack">
+          <div id="crew-bar" class="crew-bar" aria-label="Crew"></div>
+          <div class="metric-label">Crew</div>
+        </div>
+        <div class="ship-focus">
+          <div class="race-tag" id="player-race-tag">Servos</div>
+          <div class="ship-preview">
+            <img id="player-ship-img" src="" alt="Commander ship sprite">
+          </div>
+          <div class="captain-name" id="player-captain-name">Captain ???</div>
+        </div>
+        <div class="metric-stack">
+          <div id="battery-grid" class="battery-grid" aria-label="Battery"></div>
+          <div class="metric-label">Battery</div>
+          <div class="metric-value" id="hud-batt">100%</div>
+        </div>
+      </div>
+      <div class="panel-body">
+        <div class="portrait-stack">
+          <div id="avatar-wrap">
+            <img id="avatar-img" src="" alt="Pilot Avatar">
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Enemy panel -->
+    <div id="enemy-panel" class="side-panel">
+      <div class="panel-title"><span id="enemy-race-label">Unknown</span></div>
+      <div class="ship-display">
+        <div class="metric-stack">
+          <div id="enemy-crew-bar" class="crew-bar" aria-label="Enemy Crew"></div>
+          <div class="metric-label">Crew</div>
+        </div>
+        <div class="ship-focus">
+          <div class="race-tag" id="enemy-race-tag">Unknown</div>
+          <div class="ship-preview">
+            <img id="enemy-ship-img" src="" alt="Enemy ship sprite">
+          </div>
+          <div class="captain-name" id="enemy-captain-name">Captain ???</div>
+        </div>
+        <div class="metric-stack">
+          <div id="enemy-battery-grid" class="battery-grid" aria-label="Enemy Battery"></div>
+          <div class="metric-label">Battery</div>
+          <div class="metric-value" id="enemy-hud-batt">100%</div>
+        </div>
+      </div>
+      <div class="panel-body">
+        <div class="portrait-stack">
+          <div class="avatar-wrap" id="enemy-avatar-wrap">
+            <img id="enemy-avatar-img" src="" alt="Enemy Avatar">
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+  <canvas id="game"></canvas>
+  <div id="ship-overlay" class="overlay hidden">
+    <div class="overlay-card">
+      <h2>Ready Your Ship</h2>
+      <p>Select a craft to deploy. The enemy will scramble a random counter ship.</p>
+      <div id="ship-grid" class="ship-grid"></div>
+      <div class="overlay-actions">
+        <button id="overlay-cancel">Cancel</button>
+        <button id="overlay-start">Start Battle</button>
+      </div>
+    </div>
+  </div>
+  <script src="main.js"></script>
+</body>
+</html>
