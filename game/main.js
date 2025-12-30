@@ -91,7 +91,7 @@ const SHIP_TYPES = [
       damage:26
     }
   },
-  {id:'obama',name:'Humper Cruiser',classLabel:'Hopebringer Cruiser',size:24,speed:155,hp:150,fireRate:420,color:'#f8b2ff',spriteAngleOffset:Math.PI,spriteScale:0.12,overlayRotation:90,trailColors:{core:[255,220,150],mid:[255,150,90]},
+  {id:'obama',name:'Obama',classLabel:'Humper Cruiser',size:24,speed:155,hp:150,fireRate:420,color:'#f8b2ff',spriteAngleOffset:Math.PI,spriteScale:0.12,overlayRotation:90,trailColors:{core:[255,220,150],mid:[255,150,90]},
     projectile:{
       style:'plasmaOrb',
       radius:9,
@@ -136,6 +136,64 @@ const SHIP_TYPES = [
       speed:520,
       ttl:1.5,
       muzzleOffset:14
+    }
+  },
+  {id:'pickle',name:'Pickle',classLabel:'Brine Hive',size:32,speed:130,hp:230,fireRate:520,color:'#8cd96e',spriteAngleOffset:-Math.PI/2,spriteScale:0.16,trailColors:{core:[220,255,190],mid:[110,210,110]},
+    special:{
+      type:'pickleHive',
+      cost:18,
+      cooldown:13,
+      hpSacrifice:2,
+      fighter:{
+        count:2,
+        hp:16,
+        speed:240,
+        accel:520,
+        fireInterval:0.45,
+        projectileDamage:4,
+        projectileSpeed:420,
+        projectileTtl:1.6,
+        returnTime:15,
+        size:9
+      }
+    },
+    projectile:{
+      style:'plasmaOrb',
+      radius:14,
+      tailLength:54,
+      tailWidth:26,
+      core:[230,255,210],
+      mid:[150,245,150],
+      rim:[70,160,80],
+      speed:360,
+      ttl:2.4,
+      muzzleOffset:28,
+      damage:6,
+      acid:{
+        damagePerSecond:12,
+        duration:5
+      }
+    }
+  },
+  {id:'fattian',name:'Fattian',classLabel:'Furnace Siege Platform',size:30,speed:92,hp:260,fireRate:1650,color:'#d86b42',spriteAngleOffset:-Math.PI/2,spriteScale:0.17,trailColors:{core:[255,180,120],mid:[180,70,40]},energyCapacity:160,energyRegen:7,energyCost:34,
+    special:{
+      type:'furnaceFuel',
+      cost:0,
+      cooldown:7,
+      crewCost:1
+    },
+    projectile:{
+      style:'plasmaBolt',
+      length:52,
+      radius:6,
+      core:[255,230,200],
+      mid:[255,150,80],
+      tail:[240,80,40],
+      speed:900,
+      ttl:3.9,
+      muzzleOffset:34,
+      damage:60,
+      recoil:320
     }
   },
   {id:'lunarian',name:'Lunarian',classLabel:'Moon Lance',size:16,speed:165,hp:130,fireRate:480,color:'#dde6ff',spriteAngleOffset:-Math.PI/2,spriteScale:0.08,trailColors:{core:[200,140,255],mid:[130,70,210]},
@@ -497,6 +555,8 @@ const BATTERY_SEGMENTS = 6;
 
 // Game state
 let running=false; let ships=[], bullets=[];
+let fighters = [];
+let fighterIdCounter = 1;
 let stars = [], planets = [];
 let starLayers = [];
 let particles = [];
@@ -529,12 +589,18 @@ let deathAudioTried = false;
 const FART_CLOUD_SOUND = '../fart_IXihrxq.mp3';
 let fartCloudAudioTemplate = null;
 let fartCloudAudioTried = false;
+const FURNACE_SOUND = '../steve.wav';
+let furnaceAudioTemplate = null;
+let furnaceAudioTried = false;
 const DEFAULT_VICTORY_THEME = 'assets/sfx/victory.mp3';
 const VICTORY_THEME_MAP = {
   default: DEFAULT_VICTORY_THEME,
-  bad_ghost: 'assets/music/victory/bad_ghost.mp3'
+  bad_ghost: 'assets/music/victory/bad_ghost.mp3',
+  fattian: '../obituary.mp3'
 };
 const victoryAudioCache = {};
+let activeVictoryClip = null;
+let activeVictoryRace = null;
 const victoryState = {active:false, ship:null, start:0, duration:2800};
 const VICTORY_AFTERGLOW = 2400; // extra hold so the scene can fade out
 const pendingVictory = {active:false, winner:null, start:0};
@@ -728,6 +794,26 @@ function playFartCloudSound(){
   }catch(err){}
 }
 
+function ensureFurnaceAudio(){
+  if(furnaceAudioTemplate || furnaceAudioTried) return furnaceAudioTemplate;
+  furnaceAudioTried = true;
+  const audio = new Audio();
+  audio.preload = 'auto';
+  audio.src = FURNACE_SOUND;
+  furnaceAudioTemplate = audio;
+  return furnaceAudioTemplate;
+}
+
+function playFurnaceSound(){
+  const template = ensureFurnaceAudio();
+  if(!template) return;
+  try{
+    const clip = template.cloneNode(true);
+    clip.volume = 0.95;
+    clip.play();
+  }catch(err){}
+}
+
 function getVictoryThemeSource(raceId){
   if(raceId && VICTORY_THEME_MAP[raceId]) return VICTORY_THEME_MAP[raceId];
   return VICTORY_THEME_MAP.default || DEFAULT_VICTORY_THEME;
@@ -743,13 +829,33 @@ function ensureVictoryAudio(raceId){
   return audio;
 }
 
+function stopActiveVictorySound(filterRaceId){
+  if(!activeVictoryClip) return;
+  if(filterRaceId && activeVictoryRace !== filterRaceId) return;
+  try{
+    activeVictoryClip.pause();
+    activeVictoryClip.currentTime = 0;
+  }catch(err){}
+  activeVictoryClip = null;
+  activeVictoryRace = null;
+}
+
 function playVictorySound(raceId){
+  stopActiveVictorySound();
   const template = ensureVictoryAudio(raceId);
   if(!template) return;
   try{
     const clip = template.cloneNode(true);
     clip.volume = 0.9;
     clip.play();
+    activeVictoryClip = clip;
+    activeVictoryRace = raceId || 'default';
+    clip.addEventListener('ended', ()=>{
+      if(activeVictoryClip === clip){
+        activeVictoryClip = null;
+        activeVictoryRace = null;
+      }
+    });
   }catch(err){}
 }
 
@@ -931,6 +1037,8 @@ class Ship{
       dodgeCooldown: 0,
       dodgeAngle: 0
     };
+    this.damageOverTime = [];
+    this.crewLossIndicator = null;
   }
   beginWarpFrom(fromX, fromY, duration=0.75){
     const toX = this.x;
@@ -974,7 +1082,7 @@ class Ship{
       this.x += this.vx*dt; this.y += this.vy*dt;
       this.cool -= dt*1000;
       if(keys.space && this.cool<=0){
-        if(this.shoot(this.angle)) this.cool = this.fireRate;
+        if(this.shoot(this.angle)) this.cool = this.getFireCooldown();
       }
       if(keys.shift){
         if(!this.specialLatch){
@@ -997,27 +1105,53 @@ class Ship{
       this.trail.forEach(seg=> seg.life -= dt*2.2);
       this.trail = this.trail.filter(seg=> seg.life>0);
     }
+    if(this.crewLossIndicator){
+      this.crewLossIndicator.timer -= dt;
+      if(this.crewLossIndicator.timer <= 0) this.crewLossIndicator = null;
+    }
     this.updateSpecial(dt);
+    this.updateDamageOverTime(dt);
     this.energy = Math.min(this.maxEnergy, this.energy + this.energyRegen * dt);
   }
   canUseSpecial(){
     if(!this.specialConfig) return false;
     if(this.activeSpecial){
-      return this.activeSpecial.type === 'lunarCloak';
+      if(this.activeSpecial.type === 'lunarCloak') return true;
+      if(this.activeSpecial.type === 'pickleHive'){
+        const cost = this.specialConfig.cost || 0;
+        return this.energy >= cost && this.hasPickleSpawnCapacity(this.activeSpecial);
+      }
+      return false;
     }
     if(this.specialCooldown > 0) return false;
+    if(this.specialConfig.type === 'furnaceFuel'){
+      const crewCost = Math.max(0, this.specialConfig.crewCost || 1);
+      if(this.hp - crewCost < 1) return false;
+    }
     const cost = this.specialConfig.cost || 0;
     return this.energy >= cost;
   }
   attemptSpecial(){
     if(!this.canUseSpecial()) return false;
-    if(this.activeSpecial && this.activeSpecial.type === 'lunarCloak'){
-      this.activeSpecial = null;
-      this.endCloak();
-      this.specialCooldown = this.specialConfig.cooldown || 0;
-      return true;
-    }
     const conf = this.specialConfig || {};
+    if(this.activeSpecial && this.activeSpecial.type === 'pickleHive'){
+      const success = this.extendPickleHive(this.activeSpecial);
+      if(success){
+        const cost = conf.cost || 0;
+        if(cost > 0){
+          this.energy = Math.max(0, this.energy - cost);
+        }
+        if(this.control){
+          if(conf.type !== 'fartCloud'){
+            playSfx('special', this.type.id);
+          }
+          const now = performance.now ? performance.now() : Date.now();
+          const durMs = Number.isFinite(this.activeSpecial.duration) ? (this.activeSpecial.duration * 1000) : 1400;
+          specialActiveUntil = now + durMs;
+        }
+      }
+      return success;
+    }
     const spec = {
       type: conf.type || 'special',
       age: 0,
@@ -1029,8 +1163,18 @@ class Ship{
       flash: conf.flash || 0,
       config: conf
     };
+    if(spec.type === 'pickleHive'){
+      const spawned = this.startPickleHive(spec);
+      if(spawned <= 0) return false;
+    }
+    if(spec.type === 'furnaceFuel'){
+      const accepted = this.executeFurnaceFuel(spec);
+      if(!accepted) return false;
+    }
     const cost = conf.cost || 0;
-    this.energy = Math.max(0, this.energy - cost);
+    if(cost > 0){
+      this.energy = Math.max(0, this.energy - cost);
+    }
     this.activeSpecial = spec;
     this.specialCooldown = conf.cooldown || 0;
     if(spec.type === 'lunarCloak'){
@@ -1039,7 +1183,7 @@ class Ship{
       if(!this.control) this.trail = [];
     }
     if(this.control){
-      if(spec.type !== 'fartCloud'){
+      if(spec.type !== 'fartCloud' && spec.type !== 'furnaceFuel'){
         playSfx('special', this.type.id);
       }
       const now = performance.now ? performance.now() : Date.now();
@@ -1070,10 +1214,18 @@ class Ship{
       case 'orbitTurret':
         this.updateOrbitTurret(spec, dt);
         break;
+      case 'pickleHive':
+        this.updatePickleHive(spec, dt);
+        break;
+      case 'furnaceFuel':
+        // instant effect handled on activation
+        break;
       default:
         break;
     }
-    if(spec.age >= spec.duration || this.hp <= 0){
+    const finiteDuration = Number.isFinite(spec.duration) ? spec.duration : null;
+    const expired = finiteDuration != null ? spec.age >= finiteDuration : false;
+    if(expired || spec.forceEnd || this.hp <= 0){
       if(spec.type === 'lunarCloak') this.endCloak();
       this.activeSpecial = null;
     }
@@ -1331,11 +1483,152 @@ class Ship{
       turret.targetPos = null;
     }
   }
+  hasPickleSpawnCapacity(spec){
+    if(!spec) return false;
+    spec.fighters = (spec.fighters || []).filter(f=> f && f.alive);
+    const plan = this.computePickleSpawnPlan(spec);
+    return plan.count > 0;
+  }
+  startPickleHive(spec){
+    spec.duration = Infinity;
+    spec.elapsedFlight = 0;
+    spec.hpDebtOutstanding = 0;
+    spec.fighters = [];
+    spec.forceEnd = false;
+    return this.spawnPickleFighters(spec);
+  }
+  extendPickleHive(spec){
+    if(!spec) return false;
+    spec.fighters = (spec.fighters || []).filter(f=> f && f.alive);
+    return this.spawnPickleFighters(spec) > 0;
+  }
+  executeFurnaceFuel(spec){
+    const conf = spec.config || this.specialConfig || {};
+    const crewCost = Math.max(0, conf.crewCost || 1);
+    if(this.hp - crewCost < 1){
+      spec.forceEnd = true;
+      return false;
+    }
+    this.hp = Math.max(1, this.hp - crewCost);
+    this.energy = this.maxEnergy;
+    const flashDuration = conf.flashDuration || 0.45;
+    spec.duration = flashDuration;
+    spec.forceEnd = true;
+    playFurnaceSound();
+    const flameCount = 18;
+    for(let i=0;i<flameCount;i++){
+      const angle = Math.random()*Math.PI*2;
+      const speed = 40 + Math.random()*90;
+      particles.push({
+        x: this.x + Math.cos(angle)*6,
+        y: this.y + Math.sin(angle)*6,
+        vx: Math.cos(angle) * speed * 0.35,
+        vy: Math.sin(angle) * speed * 0.35,
+        life: 0.4 + Math.random()*0.3,
+        size: 1 + Math.random()*1.3,
+        core: [255,200,140],
+        mid: [255,120,60]
+      });
+    }
+    return true;
+  }
+  consumeCrew(amount){
+    const loss = Math.max(0, amount || 0);
+    if(loss <= 0) return;
+    this.hp = Math.max(0, this.hp - loss);
+    const baseDuration = 0.7;
+    if(!this.crewLossIndicator){
+      this.crewLossIndicator = {amount: loss, timer: baseDuration, baseDuration};
+    } else {
+      this.crewLossIndicator.amount += loss;
+      this.crewLossIndicator.timer = baseDuration;
+      this.crewLossIndicator.baseDuration = baseDuration;
+    }
+  }
+  computePickleSpawnPlan(spec, requestedCount){
+    const conf = spec.config || this.specialConfig || {};
+    const fighterConf = conf.fighter || {};
+    const baseBatch = Math.max(1, requestedCount || fighterConf.count || 1);
+    const hpSacrifice = Math.max(0, conf.hpSacrifice || 0);
+    const minHpReserve = Math.max(1, conf.minHpReserve || 1);
+    const availableHp = this.hp - minHpReserve;
+    if(hpSacrifice > 0 && availableHp < hpSacrifice){
+      return {count: 0, hpCost: 0, restorePerFighter: 0, minHpReserve, fighterConf};
+    }
+    const activeCount = (spec.fighters || []).length;
+    const configuredMax = fighterConf.maxActive;
+    const slotBudget = (typeof configuredMax === 'number' && isFinite(configuredMax))
+      ? Math.max(0, configuredMax - activeCount)
+      : Infinity;
+    const spawnCount = Math.max(0, Math.min(baseBatch, slotBudget));
+    if(spawnCount <= 0){
+      return {count: 0, hpCost: 0, restorePerFighter: 0, minHpReserve, fighterConf};
+    }
+    const hpCost = hpSacrifice;
+    const restorePerFighter = spawnCount > 0 ? hpCost / spawnCount : 0;
+    return {
+      count: spawnCount,
+      hpCost,
+      restorePerFighter,
+      minHpReserve,
+      fighterConf
+    };
+  }
+  spawnPickleFighters(spec, requestedCount){
+    if(!spec) return 0;
+    spec.fighters = (spec.fighters || []).filter(f=> f && f.alive);
+    const plan = this.computePickleSpawnPlan(spec, requestedCount);
+    if(plan.count <= 0) return 0;
+    if(plan.count > 0 && plan.hpCost > 0){
+      this.hp = Math.max(plan.minHpReserve, this.hp - plan.hpCost);
+      spec.hpDebtOutstanding = (spec.hpDebtOutstanding || 0) + plan.hpCost;
+    }
+    spec.elapsedFlight = 0;
+    spec.forceEnd = false;
+    const total = plan.count;
+    let spawned = 0;
+    for(let i=0;i<total;i++){
+      const fighter = createPickleFighter(this, spec, plan.fighterConf, i, total, plan.restorePerFighter);
+      if(fighter){
+        spec.fighters.push(fighter);
+        spawned++;
+      }
+    }
+    return spawned;
+  }
+  updatePickleHive(spec, dt){
+    spec.elapsedFlight = (spec.elapsedFlight || 0) + dt;
+    const fighterConf = spec.config ? spec.config.fighter || {} : {};
+    const returnTime = fighterConf.returnTime || 15;
+    const activeFighters = (spec.fighters || []).filter(f=> f && f.alive);
+    spec.fighters = activeFighters;
+    if(spec.elapsedFlight >= returnTime){
+      activeFighters.forEach(f=>{
+        if(f && f.alive) f.state = 'returning';
+      });
+    }
+    if(!activeFighters.length){
+      spec.forceEnd = true;
+    }
+  }
   updateAI(dt){
     const ai = this.ai || (this.ai = {mode:'approach',timer:0,strafeDir:1,dodgeCooldown:0,dodgeAngle:0});
+    const preferRange = this.size*6 + 80;
     const enemies = ships.filter(s=>s.team!==this.team && s.hp>0 && !s.isWarping());
-    if(!enemies.length) return;
-    const target = enemies.reduce((a,b)=> distance(this,b) < distance(this,a) ? b : a, enemies[0]);
+    const hostileFighterCount = countEnemyFighters(this.team);
+    if(!enemies.length && hostileFighterCount === 0) return;
+    const shipTarget = enemies.length ? enemies.reduce((a,b)=> distance(this,b) < distance(this,a) ? b : a, enemies[0]) : null;
+    const fighterTarget = hostileFighterCount ? getNearestEnemyFighter(this.team, this) : null;
+    let target = shipTarget;
+    if(fighterTarget){
+      const fighterDist = Math.hypot(fighterTarget.x - this.x, fighterTarget.y - this.y);
+      const shipDist = target ? Math.hypot(target.x - this.x, target.y - this.y) : Infinity;
+      const fighterBias = hostileFighterCount >= 3 ? 0.8 : 0.6;
+      if(!target || fighterDist < shipDist * fighterBias || fighterDist < preferRange * 0.85){
+        target = fighterTarget;
+      }
+    }
+    if(!target) return;
     ai.target = target;
     const nowMs = performance.now ? performance.now() : Date.now();
     const targetInvisible = target && target.isCloaked && target.isCloaked();
@@ -1358,7 +1651,6 @@ class Ship{
     const dx = anchor.x - this.x;
     const dy = anchor.y - this.y;
     const dist = Math.hypot(dx,dy) || 0.0001;
-    const preferRange = this.size*6 + 80;
     const virtualTarget = targetInvisible ? Object.assign({}, target, {x: anchor.x, y: anchor.y, vx: 0, vy: 0}) : target;
     let aimAngle = computeLeadAngle(this, virtualTarget, 420) ?? Math.atan2(dy,dx);
     if(targetInvisible) aimAngle += (Math.random()-0.5)*0.35;
@@ -1457,6 +1749,11 @@ class Ship{
       } else if(this.specialConfig.type === 'orbitTurret'){
         const beamRange = (this.specialConfig.turret && this.specialConfig.turret.beamRange) || preferRange;
         shouldUse = dist <= beamRange * 0.95;
+      } else if(this.specialConfig.type === 'pickleHive'){
+        shouldUse = dist <= preferRange * 1.3 || Math.random() < 0.08;
+      } else if(this.specialConfig.type === 'furnaceFuel'){
+        const crewCost = Math.max(0, this.specialConfig.crewCost || 1);
+        shouldUse = (this.energy < this.maxEnergy * 0.45) && (this.hp - crewCost >= 1.5);
       }
       if(shouldUse){
         this.attemptSpecial();
@@ -1465,7 +1762,7 @@ class Ship{
     this.cool -= dt*1000;
     if(canSeeTarget && dist < shotRange && this.cool <= 0){
       if(this.shoot(aimAngle)){
-        this.cool = this.fireRate * (0.7 + Math.random()*0.6);
+        this.cool = this.getFireCooldown(0.7 + Math.random()*0.6);
       }
     }
   }
@@ -1511,12 +1808,29 @@ class Ship{
       raceId: this.type.id,
       projectile
     });
+    if(this.type && this.type.projectile && this.type.projectile.recoil){
+      const recoil = this.type.projectile.recoil;
+      this.vx -= Math.cos(angle) * recoil;
+      this.vy -= Math.sin(angle) * recoil;
+    }
     this.lastShotAt = performance.now ? performance.now() : Date.now();
     if(this.control){
       lastShotTime = performance.now();
     }
     playSfx('fire', this.type.id);
     return true;
+  }
+  getFireCooldown(multiplier=1){
+    const baseRate = this.fireRate || 500;
+    let rate = baseRate * multiplier;
+    if(this.type && this.type.id === 'fattian'){
+      const ratio = this.maxEnergy > 0 ? Math.max(0, Math.min(1, this.energy / this.maxEnergy)) : 0;
+      const fastFactor = 0.28; // near full battery, faster cadence
+      const slowFactor = 1.35; // drained battery, sluggish reload
+      const scale = lerp(fastFactor, slowFactor, 1 - ratio);
+      rate *= scale;
+    }
+    return rate;
   }
   draw(ctx){
     const warping = this.isWarping();
@@ -1566,7 +1880,22 @@ class Ship{
       ctx.fillStyle = fg; ctx.beginPath(); ctx.arc(fx,fy,this.size*0.65,0,Math.PI*2); ctx.fill();
     }
     ctx.restore();
+    this.drawCrewLossIndicator(ctx);
     this.drawSpecial(ctx);
+  }
+  drawCrewLossIndicator(ctx){
+    if(!this.crewLossIndicator) return;
+    const info = this.crewLossIndicator;
+    const base = info.baseDuration || 0.7;
+    const progress = Math.max(0, Math.min(1, info.timer / base));
+    const offset = (1 - progress) * 24;
+    const shownLoss = Math.max(1, Math.round(info.amount));
+    ctx.save();
+    ctx.font = '700 13px "Press Start 2P", monospace';
+    ctx.fillStyle = `rgba(255,90,90,${progress})`;
+    ctx.textAlign = 'center';
+    ctx.fillText(`-${shownLoss}`, this.x, this.y - this.size - 8 - offset);
+    ctx.restore();
   }
   // Render the clustered white ion exhaust jets unique to Obama's cruiser.
   drawObamaIonTrails(ctx){
@@ -1637,9 +1966,35 @@ class Ship{
       case 'orbitTurret':
         this.drawOrbitTurret(ctx, spec);
         break;
+      case 'pickleHive':
+        // Fighters draw separately during the global render.
+        break;
       default:
         break;
     }
+  }
+  // Tick down any lingering acid burns or similar DoT effects.
+  updateDamageOverTime(dt){
+    if(!this.damageOverTime.length || this.hp <= 0) return;
+    this.damageOverTime.forEach(effect=>{
+      effect.elapsed = (effect.elapsed || 0) + dt;
+      const dps = effect.damagePerSecond || 0;
+      if(dps > 0) applyDamage(this, dps * dt);
+    });
+    this.damageOverTime = this.damageOverTime.filter(effect=>{
+      if(this.hp <= 0) return false;
+      const duration = effect.duration ?? 0;
+      return effect.elapsed < duration;
+    });
+  }
+  applyAcidEffect(config){
+    const acid = config || {};
+    this.damageOverTime.push({
+      type: 'acid',
+      duration: Math.max(0.1, acid.duration || 5),
+      damagePerSecond: Math.max(0, acid.damagePerSecond || acid.damage || 8),
+      elapsed: 0
+    });
   }
   isCloaked(){
     return !!(this.activeSpecial && this.activeSpecial.type === 'lunarCloak');
@@ -2453,6 +2808,260 @@ function drawFartClouds(ctx){
   });
 }
 
+// --- Pickle fighter helpers ---
+function createPickleFighter(parent, spec, conf, index, total, hpRestore){
+  if(!parent) return null;
+  const offset = (index - (total-1)/2) * 0.35;
+  const launchAngle = parent.angle + Math.PI + offset;
+  const launchDist = parent.size * 0.9;
+  const fighter = {
+    id: fighterIdCounter++,
+    kind: 'pickleHive',
+    spec,
+    parent,
+    team: parent.team,
+    x: parent.x + Math.cos(launchAngle) * launchDist,
+    y: parent.y + Math.sin(launchAngle) * launchDist,
+    vx: parent.vx * 0.4,
+    vy: parent.vy * 0.4,
+    speed: conf.speed || 240,
+    accel: conf.accel || 520,
+    size: conf.size || 9,
+    hp: conf.hp || 14,
+    maxHp: conf.hp || 14,
+    fireInterval: conf.fireInterval || 0.45,
+    fireCooldown: (index % 2) * 0.18,
+    projectileDamage: conf.projectileDamage || 4,
+    projectileSpeed: conf.projectileSpeed || 420,
+    projectileTtl: conf.projectileTtl || 1.4,
+    state: 'attack',
+    age: 0,
+    maxFlightTime: conf.returnTime || 15,
+    orbitPhase: index * Math.PI * 0.8,
+    restoreAmount: hpRestore != null ? hpRestore : 0,
+    alive: true,
+    colorCore: conf.core || [235,255,210],
+    colorMid: conf.mid || [150,235,170]
+  };
+  fighters.push(fighter);
+  return fighter;
+}
+
+function updateFighters(dt){
+  if(!fighters.length) return;
+  fighters.forEach(f=>{
+    if(!f || !f.alive) return;
+    switch(f.kind){
+      case 'pickleHive':
+      default:
+        updatePickleFighter(f, dt);
+        break;
+    }
+  });
+  fighters = fighters.filter(f=> f && f.alive);
+}
+
+function updatePickleFighter(f, dt){
+  f.age += dt;
+  if(!f.parent || f.parent.hp <= 0) f.state = 'returning';
+  if(f.state === 'attack' && f.age >= f.maxFlightTime) f.state = 'returning';
+  if(f.state === 'attack'){
+    const target = getNearestEnemyShip(f.team, f);
+    if(target){
+      f.target = target;
+      const angle = Math.atan2(target.y - f.y, target.x - f.x);
+      const wobble = Math.sin(f.age*4 + f.orbitPhase) * 0.25;
+      const accel = f.accel || 520;
+      f.vx += Math.cos(angle + wobble*0.35) * accel * dt;
+      f.vy += Math.sin(angle + wobble*0.35) * accel * dt;
+      const vel = Math.hypot(f.vx, f.vy);
+      const maxSpeed = f.speed;
+      if(vel > maxSpeed){
+        f.vx = (f.vx/vel) * maxSpeed;
+        f.vy = (f.vy/vel) * maxSpeed;
+      }
+      f.fireCooldown -= dt;
+      if(f.fireCooldown <= 0){
+        firePickleFighterShot(f, angle);
+        f.fireCooldown = f.fireInterval;
+      }
+    } else {
+      f.vx *= 0.98;
+      f.vy *= 0.98;
+    }
+  } else if(f.state === 'returning'){
+    if(!f.parent){
+      retireFighter(f);
+      return;
+    }
+    const angle = Math.atan2(f.parent.y - f.y, f.parent.x - f.x);
+    const accel = (f.accel || 420) * 0.9;
+    f.vx += Math.cos(angle) * accel * dt;
+    f.vy += Math.sin(angle) * accel * dt;
+    const vel = Math.hypot(f.vx, f.vy);
+    const maxSpeed = f.speed * 1.1;
+    if(vel > maxSpeed){
+      f.vx = (f.vx/vel) * maxSpeed;
+      f.vy = (f.vy/vel) * maxSpeed;
+    }
+    const dist = Math.hypot(f.parent.x - f.x, f.parent.y - f.y);
+    if(dist < Math.max(18, f.parent.size*0.65)){
+      dockFighter(f);
+      return;
+    }
+  }
+  const drag = 0.992;
+  f.vx *= drag;
+  f.vy *= drag;
+  f.x += f.vx * dt;
+  f.y += f.vy * dt;
+}
+
+function firePickleFighterShot(fighter, angle){
+  const speed = fighter.projectileSpeed || 420;
+  bullets.push({
+    x: fighter.x,
+    y: fighter.y,
+    dx: Math.cos(angle) * speed,
+    dy: Math.sin(angle) * speed,
+    team: fighter.team,
+    ttl: fighter.projectileTtl || 1.4,
+    damage: fighter.projectileDamage || 4,
+    raceId: fighter.parent ? fighter.parent.type.id : 'pickle',
+    projectile:{
+      style:'plasmaBolt',
+      length:22,
+      radius:3,
+      core:[235,255,220],
+      mid:[150,235,170],
+      tail:[70,160,100]
+    }
+  });
+  particles.push({
+    x: fighter.x,
+    y: fighter.y,
+    vx: Math.cos(angle + Math.PI) * 40 + (Math.random()-0.5)*25,
+    vy: Math.sin(angle + Math.PI) * 40 + (Math.random()-0.5)*25,
+    life: 0.2,
+    size: 0.8,
+    core: fighter.colorCore,
+    mid: fighter.colorMid
+  });
+}
+
+function getNearestEnemyShip(team, origin){
+  let nearest = null;
+  let bestDist = Infinity;
+  ships.forEach(ship=>{
+    if(!ship || ship.team === team || ship.hp <= 0 || ship.isWarping()) return;
+    const dist = Math.hypot(ship.x - origin.x, ship.y - origin.y);
+    if(dist < bestDist){
+      bestDist = dist;
+      nearest = ship;
+    }
+  });
+  return nearest;
+}
+
+function getNearestEnemyFighter(team, origin){
+  let nearest = null;
+  let bestDist = Infinity;
+  fighters.forEach(fighter=>{
+    if(!fighter || !fighter.alive || fighter.team === team) return;
+    const dist = Math.hypot(fighter.x - origin.x, fighter.y - origin.y);
+    if(dist < bestDist){
+      bestDist = dist;
+      nearest = fighter;
+    }
+  });
+  return nearest;
+}
+
+function countEnemyFighters(team){
+  let total = 0;
+  fighters.forEach(fighter=>{
+    if(!fighter || !fighter.alive || fighter.team === team) return;
+    total++;
+  });
+  return total;
+}
+
+function damageFighter(fighter, amount){
+  if(!fighter || !fighter.alive || amount <= 0) return;
+  fighter.hp -= amount;
+  if(fighter.hp <= 0){
+    spawnFighterPop(fighter);
+    retireFighter(fighter);
+  }
+}
+
+function dockFighter(fighter){
+  if(fighter.restoreAmount && fighter.parent && fighter.parent.hp > 0){
+    fighter.parent.hp = Math.min(fighter.parent.type.hp, fighter.parent.hp + fighter.restoreAmount);
+    if(fighter.spec){
+      fighter.spec.hpDebtOutstanding = Math.max(0, (fighter.spec.hpDebtOutstanding || 0) - fighter.restoreAmount);
+    }
+  }
+  retireFighter(fighter);
+}
+
+function retireFighter(fighter){
+  fighter.alive = false;
+  if(fighter.spec && fighter.spec.fighters){
+    fighter.spec.fighters = fighter.spec.fighters.filter(entry=> entry !== fighter);
+  }
+}
+
+function spawnFighterPop(fighter){
+  for(let i=0;i<6;i++){
+    particles.push({
+      x: fighter.x,
+      y: fighter.y,
+      vx: (Math.random()-0.5)*150,
+      vy: (Math.random()-0.5)*150,
+      life: 0.25 + Math.random()*0.2,
+      size: 0.6 + Math.random()*0.4,
+      core: fighter.colorCore,
+      mid: fighter.colorMid
+    });
+  }
+}
+
+function drawFighters(ctx){
+  if(!fighters.length) return;
+  ctx.save();
+  fighters.forEach(f=>{
+    if(!f || !f.alive) return;
+    ctx.save();
+    ctx.translate(f.x, f.y);
+    const angle = Math.atan2(f.vy, f.vx) || 0;
+    ctx.rotate(angle);
+    const bodyLen = Math.max(14, f.size*2.1);
+    const bodyWidth = Math.max(6, f.size*0.8);
+    const grad = ctx.createLinearGradient(-bodyLen/2, 0, bodyLen/2, 0);
+    grad.addColorStop(0, rgba(f.colorMid, 0.15));
+    grad.addColorStop(0.4, rgba(f.colorMid, 0.65));
+    grad.addColorStop(1, rgba(f.colorCore, 0.95));
+    ctx.fillStyle = grad;
+    ctx.beginPath();
+    ctx.moveTo(bodyLen/2, 0);
+    ctx.lineTo(-bodyLen/2, bodyWidth/2);
+    ctx.lineTo(-bodyLen/2, -bodyWidth/2);
+    ctx.closePath();
+    ctx.fill();
+    const glow = ctx.createRadialGradient(0,0,0,0,0,bodyWidth*1.6);
+    glow.addColorStop(0, rgba(f.colorCore, 0.9));
+    glow.addColorStop(1, 'rgba(0,0,0,0)');
+    ctx.fillStyle = glow;
+    ctx.globalAlpha = 0.65;
+    ctx.beginPath();
+    ctx.arc(0,0,bodyWidth,0,Math.PI*2);
+    ctx.fill();
+    ctx.restore();
+  });
+  ctx.restore();
+}
+
 function applyDamage(ship, amount){
   if(ship.hp <= 0 || amount <= 0) return;
   if(ship.invulnerable) return;
@@ -2467,6 +3076,7 @@ function applyDamage(ship, amount){
 
 function spawnBattle(){
   ships = []; bullets = [];
+  fighters = [];
   explosions = [];
   fartClouds = [];
   clearAllSectorClouds();
@@ -2561,6 +3171,25 @@ function changeSector(dx,dy,player){
       s.vx = 0; s.vy = 0;
     });
   }
+  if(fighters.length){
+    const formations = new Map();
+    fighters.forEach(f=>{
+      if(!f || !f.alive || !f.parent || f.parent.hp <= 0) return;
+      if(!formations.has(f.parent)) formations.set(f.parent, []);
+      formations.get(f.parent).push(f);
+    });
+    formations.forEach((group, parent)=>{
+      group.forEach((fighter, idx)=>{
+        const spread = (idx - (group.length-1)/2) * 0.3;
+        const angle = parent.angle + Math.PI + spread;
+        const dist = parent.size + 12 + (idx % 2) * 2;
+        fighter.x = parent.x + Math.cos(angle) * dist;
+        fighter.y = parent.y + Math.sin(angle) * dist;
+        fighter.vx = parent.vx * 0.4;
+        fighter.vy = parent.vy * 0.4;
+      });
+    });
+  }
 }
 
 startBtn.addEventListener('click', ()=>{
@@ -2573,7 +3202,7 @@ resetBtn.addEventListener('click', ()=>{
   stopBattleMusic();
   resetVictoryState();
   resetAvatarFeed();
-  ships=[]; bullets=[]; explosions=[]; fartClouds=[];
+  ships=[]; bullets=[]; fighters=[]; explosions=[]; fartClouds=[];
   clearAllSectorClouds();
   hideShipOverlay();
   initializeHudMeters();
@@ -2605,6 +3234,7 @@ function loop(t){
   let player = null;
   if(running){
     ships.forEach(s=> s.hp>0 && s.update(dt));
+    updateFighters(dt);
     player = ships.find(s=> s.control);
     bullets.forEach(b=>{ b.x += b.dx*dt; b.y += b.dy*dt; b.ttl -= dt; });
     bullets = bullets.filter(b=> b.ttl>0 && b.x> -50 && b.x < canvas.width+50 && b.y > -50 && b.y < canvas.height+50);
@@ -2615,10 +3245,25 @@ function loop(t){
           if(d < s.size){
             const damage = b.damage != null ? b.damage : ((b.projectile && b.projectile.damage) || 12);
             applyDamage(s, damage);
+            if(b.projectile && b.projectile.acid && s.applyAcidEffect){
+              s.applyAcidEffect(b.projectile.acid);
+            }
             b.ttl = 0;
           }
         }
       });
+      if(b.ttl > 0 && fighters.length){
+        for(let i=0;i<fighters.length && b.ttl>0;i++){
+          const f = fighters[i];
+          if(!f || !f.alive || f.team === b.team) continue;
+          const radius = f.size || 10;
+          if(Math.hypot(b.x - f.x, b.y - f.y) < radius){
+            const damage = b.damage != null ? b.damage : ((b.projectile && b.projectile.damage) || 8);
+            damageFighter(f, damage);
+            b.ttl = 0;
+          }
+        }
+      }
       if(b.ttl > 0){
         planets.forEach(p=>{
           if(Math.hypot(b.x - p.x, b.y - p.y) < p.r){
@@ -2728,6 +3373,10 @@ function loop(t){
     }
   } else if(victoryState.active){
     if((performance.now() - victoryState.start) >= (victoryState.duration + VICTORY_AFTERGLOW)){
+      const finishingShip = victoryState.ship;
+      if(finishingShip && finishingShip.type && finishingShip.type.id === 'fattian'){
+        stopActiveVictorySound('fattian');
+      }
       victoryState.active = false;
       running = false;
     }
@@ -2759,6 +3408,7 @@ function loop(t){
   planets.forEach(p=> drawPlanet(ctx, p));
   drawFartClouds(ctx);
   ships.forEach(s=> s.hp>0 && s.draw(ctx));
+  drawFighters(ctx);
   ctx.globalCompositeOperation = 'lighter';
   particles.forEach(p=>{
     const g = ctx.createRadialGradient(p.x,p.y,0,p.x,p.y,p.size*3);
