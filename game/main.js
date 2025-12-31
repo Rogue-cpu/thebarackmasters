@@ -40,6 +40,35 @@ fit();
 // Ship types (simple placeholders; tweak stats as desired)
 const DEFAULT_TRAIL_COLORS = {core:[255,200,120], mid:[200,100,40]};
 
+function createPlaceholderShip(options){
+  const cfg = options || {};
+  const id = cfg.id || `prototype_${Date.now()}`;
+  const name = cfg.name || 'Prototype Hull';
+  return {
+    id,
+    name,
+    classLabel: cfg.classLabel || 'Prototype Hull',
+    placeholder: true,
+    notes: cfg.notes || 'Awaiting full spec',
+    size: cfg.size || 20,
+    speed: cfg.speed || 150,
+    hp: cfg.hp || 150,
+    fireRate: cfg.fireRate || 520,
+    color: cfg.color || '#888',
+    spriteAngleOffset: cfg.spriteAngleOffset ?? -Math.PI/2,
+    spriteScale: cfg.spriteScale || 0.08,
+    trailColors: cfg.trailColors || DEFAULT_TRAIL_COLORS,
+    special: cfg.special || null,
+    projectile: cfg.projectile || {
+      style:'default',
+      damage:12,
+      speed:420,
+      ttl:1.8,
+      muzzleOffset:16
+    }
+  };
+}
+
 const SHIP_TYPES = [
   {id:'servos',name:'Servos',classLabel:'Commander Frigate',size:14,speed:140,hp:60,fireRate:300,color:'#4ef',spriteAngleOffset:-Math.PI/2,spriteScale:0.058,trailColors:{core:[120,210,255],mid:[40,140,255]},
     special:{
@@ -92,6 +121,21 @@ const SHIP_TYPES = [
     }
   },
   {id:'obama',name:'Obama',classLabel:'Humper Cruiser',size:24,speed:155,hp:150,fireRate:420,color:'#f8b2ff',spriteAngleOffset:Math.PI,spriteScale:0.12,overlayRotation:90,trailColors:{core:[255,220,150],mid:[255,150,90]},
+    special:{
+      type:'humperDash',
+      cost:26,
+      duration:3.6,
+      cooldown:6.5,
+      boostSpeed:980,
+      speedMultiplier:2,
+      boostAccel:1800,
+      impactDamage:70,
+      fighterDamage:32,
+      knockback:340,
+      steerAssist:0.22,
+      damageReduction:0.85,
+      invulnerableDuringDash:true
+    },
     projectile:{
       style:'plasmaOrb',
       radius:9,
@@ -196,7 +240,7 @@ const SHIP_TYPES = [
       recoil:320
     }
   },
-  {id:'lunarian',name:'Lunarian',classLabel:'Moon Lance',size:16,speed:165,hp:130,fireRate:480,color:'#dde6ff',spriteAngleOffset:-Math.PI/2,spriteScale:0.08,trailColors:{core:[200,140,255],mid:[130,70,210]},
+  {id:'lunarian',name:'Lunarian',classLabel:'Moon Lance',size:16,speed:165,hp:130,fireRate:90,color:'#dde6ff',spriteAngleOffset:-Math.PI/2,spriteScale:0.08,trailColors:{core:[200,140,255],mid:[130,70,210]},
     special:{
       type:'lunarCloak',
       cost:12,
@@ -209,18 +253,32 @@ const SHIP_TYPES = [
       drainPerSecond:28
     },
     projectile:{
-      style:'plasmaBolt',
-      length:34,
-      radius:4.5,
-      core:[240,230,255],
-      mid:[200,150,255],
-      tail:[110,50,180],
-      speed:520,
-      ttl:2.4,
-      muzzleOffset:18,
-      damage:14
+      style:'violetFlame',
+      length:46,
+      width:30,
+      core:[255,238,255],
+      mid:[220,170,255],
+      outer:[130,70,210],
+      flareRadius:28,
+      speed:300,
+      ttl:0.32,
+      muzzleOffset:16,
+      damage:11
     }
-  }
+  },
+  createPlaceholderShip({id:'criminal', name:'Criminal', classLabel:'Syndicate Prototype', color:'#b36b5c'}),
+  createPlaceholderShip({id:'yuptauri', name:'Yuptauri', classLabel:'Frontier Prototype', color:'#77c5ff'}),
+  createPlaceholderShip({id:'deathousemen', name:'Deathousemen', classLabel:'Night Siege Frame', color:'#4c3a52'}),
+  createPlaceholderShip({id:'shamen', name:'Shamen', classLabel:'Mystic Skiff', color:'#5a9c68'}),
+  createPlaceholderShip({id:'barack', name:'Barack', classLabel:'Dynasty Carrier', color:'#f4c2ff'}),
+  createPlaceholderShip({id:'obisdian_circuit', name:'Obisdian Circuit', classLabel:'Circuit Judge', color:'#4d566c'}),
+  createPlaceholderShip({id:'obamination', name:'Obamination', classLabel:'Absolution Hull', color:'#ff8c7a'}),
+  createPlaceholderShip({id:'phantom', name:'Phantom', classLabel:'Veiled Corvette', color:'#9ad5d8'}),
+  createPlaceholderShip({id:'taftian', name:'Taftian', classLabel:'Tribunal Cruiser', color:'#d3ab80'}),
+  createPlaceholderShip({id:'khanite', name:'Khanite', classLabel:'Heir Apparent', color:'#c47b3f'}),
+  createPlaceholderShip({id:'cabal', name:'Cabal', classLabel:'Cabal Doctrine', color:'#6e5a94'}),
+  createPlaceholderShip({id:'boring_man', name:'Boring Man', classLabel:'Doldrum Frigate', color:'#8f8f8f'}),
+  createPlaceholderShip({id:'sons_of_source', name:'Sons of Source', classLabel:'Source Choir', color:'#ffe8a6'})
 ];
 
 const SHIP_SPRITES = {};
@@ -1171,6 +1229,10 @@ class Ship{
       const accepted = this.executeFurnaceFuel(spec);
       if(!accepted) return false;
     }
+    if(spec.type === 'humperDash'){
+      const primed = this.startHumperDash(spec);
+      if(!primed) return false;
+    }
     const cost = conf.cost || 0;
     if(cost > 0){
       this.energy = Math.max(0, this.energy - cost);
@@ -1217,6 +1279,9 @@ class Ship{
       case 'pickleHive':
         this.updatePickleHive(spec, dt);
         break;
+      case 'humperDash':
+        this.updateHumperDash(spec, dt);
+        break;
       case 'furnaceFuel':
         // instant effect handled on activation
         break;
@@ -1227,6 +1292,10 @@ class Ship{
     const expired = finiteDuration != null ? spec.age >= finiteDuration : false;
     if(expired || spec.forceEnd || this.hp <= 0){
       if(spec.type === 'lunarCloak') this.endCloak();
+      if(spec.type === 'humperDash'){
+        this.vx *= 0.6;
+        this.vy *= 0.6;
+      }
       this.activeSpecial = null;
     }
   }
@@ -1481,6 +1550,117 @@ class Ship{
       turret.targetPos = {x: target.x, y: target.y};
     } else {
       turret.targetPos = null;
+    }
+  }
+  startHumperDash(spec){
+    const conf = spec.config || this.specialConfig || {};
+    spec.duration = conf.duration || spec.duration || 1.35;
+    spec.hitShips = new Set();
+    spec.hitFighters = new Set();
+    spec.boostDir = {
+      x: Math.cos(this.angle),
+      y: Math.sin(this.angle)
+    };
+    const targetMultiplier = Math.max(2, conf.speedMultiplier || 2);
+    const doubledCap = (this.maxSpeed || this.speed || 0) * targetMultiplier;
+    spec.speedCap = Math.max(conf.boostSpeed || doubledCap, doubledCap);
+    spec.boostAccel = conf.boostAccel || 1700;
+    spec.knockback = conf.knockback || 320;
+    spec.impactDamage = conf.impactDamage || 65;
+    spec.fighterDamage = conf.fighterDamage || 28;
+    spec.steerAssist = (typeof conf.steerAssist === 'number') ? conf.steerAssist : 0.18;
+    const mitigation = typeof conf.damageReduction === 'number' ? conf.damageReduction : 0;
+    spec.damageReduction = Math.max(0, Math.min(0.99, mitigation));
+    spec.invulnerableDuringDash = !!conf.invulnerableDuringDash;
+    spec.trailTimer = 0;
+    spec.glowPulse = 0;
+    return true;
+  }
+  updateHumperDash(spec, dt){
+    if(!spec.hitShips) spec.hitShips = new Set();
+    if(!spec.hitFighters) spec.hitFighters = new Set();
+    spec.glowPulse += dt * 8;
+    const steer = Math.max(0, Math.min(1, spec.steerAssist * dt * 6));
+    const targetX = Math.cos(this.angle);
+    const targetY = Math.sin(this.angle);
+    spec.boostDir.x = lerp(spec.boostDir.x, targetX, steer);
+    spec.boostDir.y = lerp(spec.boostDir.y, targetY, steer);
+    const len = Math.hypot(spec.boostDir.x, spec.boostDir.y) || 1;
+    spec.boostDir.x /= len;
+    spec.boostDir.y /= len;
+
+    this.vx += spec.boostDir.x * spec.boostAccel * dt;
+    this.vy += spec.boostDir.y * spec.boostAccel * dt;
+    const cap = spec.speedCap || 980;
+    const speed = Math.hypot(this.vx, this.vy);
+    if(speed > cap){
+      const scale = cap / speed;
+      this.vx *= scale;
+      this.vy *= scale;
+    }
+
+    spec.trailTimer -= dt;
+    if(spec.trailTimer <= 0){
+      spec.trailTimer = 0.04;
+      particles.push({
+        x: this.x + (Math.random()-0.5)*6,
+        y: this.y + (Math.random()-0.5)*6,
+        vx: -spec.boostDir.x * 180 + (Math.random()-0.5)*60,
+        vy: -spec.boostDir.y * 180 + (Math.random()-0.5)*60,
+        life: 0.18 + Math.random()*0.18,
+        size: 1 + Math.random()*0.6,
+        core: [255,255,255],
+        mid: [255,210,160]
+      });
+    }
+
+    const hitRadius = this.size * 0.9;
+    ships.forEach(other=>{
+      if(!other || other === this || other.team === this.team) return;
+      if(other.hp <= 0 || other.isWarping()) return;
+      if(spec.hitShips.has(other)) return;
+      const dist = Math.hypot(other.x - this.x, other.y - this.y);
+      if(dist <= hitRadius + other.size*0.55){
+        applyDamage(other, spec.impactDamage);
+        other.vx += spec.boostDir.x * spec.knockback;
+        other.vy += spec.boostDir.y * spec.knockback;
+        this.vx *= 0.88;
+        this.vy *= 0.88;
+        spec.hitShips.add(other);
+        this.spawnHumperImpact(other);
+      }
+    });
+
+    if(fighters && fighters.length){
+      fighters.forEach(f=>{
+        if(!f || !f.alive || f.team === this.team) return;
+        if(spec.hitFighters.has(f)) return;
+        const radius = (f.size || 8) + hitRadius * 0.2;
+        if(Math.hypot(f.x - this.x, f.y - this.y) <= hitRadius + radius){
+          damageFighter(f, spec.fighterDamage);
+          f.vx += spec.boostDir.x * (spec.knockback * 0.35);
+          f.vy += spec.boostDir.y * (spec.knockback * 0.35);
+          spec.hitFighters.add(f);
+        }
+      });
+    }
+  }
+  spawnHumperImpact(target){
+    const cx = target ? (this.x + target.x) / 2 : this.x;
+    const cy = target ? (this.y + target.y) / 2 : this.y;
+    for(let i=0;i<10;i++){
+      const angle = Math.random()*Math.PI*2;
+      const speed = 160 + Math.random()*180;
+      particles.push({
+        x: cx + Math.cos(angle)*3,
+        y: cy + Math.sin(angle)*3,
+        vx: Math.cos(angle) * speed,
+        vy: Math.sin(angle) * speed,
+        life: 0.22 + Math.random()*0.25,
+        size: 1.3 + Math.random()*1.1,
+        core: [255,255,255],
+        mid: [255,200,150]
+      });
     }
   }
   hasPickleSpawnCapacity(spec){
@@ -1754,6 +1934,9 @@ class Ship{
       } else if(this.specialConfig.type === 'furnaceFuel'){
         const crewCost = Math.max(0, this.specialConfig.crewCost || 1);
         shouldUse = (this.energy < this.maxEnergy * 0.45) && (this.hp - crewCost >= 1.5);
+      } else if(this.specialConfig.type === 'humperDash'){
+        const lowHealth = this.hp < this.type.hp * 0.45;
+        shouldUse = dist <= preferRange * 0.9 || lowHealth;
       }
       if(shouldUse){
         this.attemptSpecial();
@@ -1806,7 +1989,8 @@ class Ship{
       ttl,
       damage,
       raceId: this.type.id,
-      projectile
+      projectile,
+      seed: Math.random()*Math.PI*2
     });
     if(this.type && this.type.projectile && this.type.projectile.recoil){
       const recoil = this.type.projectile.recoil;
@@ -1897,6 +2081,23 @@ class Ship{
     ctx.fillText(`-${shownLoss}`, this.x, this.y - this.size - 8 - offset);
     ctx.restore();
   }
+  drawHumperDash(ctx, spec){
+    const pulse = 0.65 + Math.sin((spec.glowPulse || spec.age*10)) * 0.25;
+    const outerRadius = this.size * (0.95 + pulse*0.2) + 6;
+    ctx.save();
+    ctx.globalCompositeOperation = 'lighter';
+    ctx.lineWidth = Math.max(3, this.size * 0.28);
+    ctx.strokeStyle = `rgba(255,255,255,${0.55 + pulse*0.3})`;
+    ctx.beginPath();
+    ctx.arc(this.x, this.y, outerRadius, 0, Math.PI*2);
+    ctx.stroke();
+    ctx.lineWidth *= 0.55;
+    ctx.strokeStyle = `rgba(255,235,200,${0.35 + pulse*0.25})`;
+    ctx.beginPath();
+    ctx.arc(this.x, this.y, outerRadius * 0.8, 0, Math.PI*2);
+    ctx.stroke();
+    ctx.restore();
+  }
   // Render the clustered white ion exhaust jets unique to Obama's cruiser.
   drawObamaIonTrails(ctx){
     if(this.type.id !== 'obama') return;
@@ -1968,6 +2169,9 @@ class Ship{
         break;
       case 'pickleHive':
         // Fighters draw separately during the global render.
+        break;
+      case 'humperDash':
+        this.drawHumperDash(ctx, spec);
         break;
       default:
         break;
@@ -2935,7 +3139,8 @@ function firePickleFighterShot(fighter, angle){
       core:[235,255,220],
       mid:[150,235,170],
       tail:[70,160,100]
-    }
+    },
+    seed: Math.random()*Math.PI*2
   });
   particles.push({
     x: fighter.x,
@@ -3065,7 +3270,17 @@ function drawFighters(ctx){
 function applyDamage(ship, amount){
   if(ship.hp <= 0 || amount <= 0) return;
   if(ship.invulnerable) return;
-  ship.hp = Math.max(0, ship.hp - amount);
+  let finalAmount = amount;
+  const spec = ship.activeSpecial;
+  if(spec && spec.type === 'humperDash'){
+    if(spec.invulnerableDuringDash) return;
+    if(spec.damageReduction){
+      const clamp = Math.max(0, Math.min(0.99, spec.damageReduction));
+      finalAmount *= (1 - clamp);
+    }
+  }
+  if(finalAmount <= 0) return;
+  ship.hp = Math.max(0, ship.hp - finalAmount);
   if(ship.hp === 0 && !ship._playedDeath){
     ship._playedDeath = true;
     spawnExplosion(ship);
@@ -3236,7 +3451,16 @@ function loop(t){
     ships.forEach(s=> s.hp>0 && s.update(dt));
     updateFighters(dt);
     player = ships.find(s=> s.control);
-    bullets.forEach(b=>{ b.x += b.dx*dt; b.y += b.dy*dt; b.ttl -= dt; });
+    bullets.forEach(b=>{
+      if(b.projectile && b.projectile.style === 'violetFlame'){
+        const drag = b.projectile.damping || 0.78;
+        b.dx *= drag;
+        b.dy *= drag;
+      }
+      b.x += b.dx*dt;
+      b.y += b.dy*dt;
+      b.ttl -= dt;
+    });
     bullets = bullets.filter(b=> b.ttl>0 && b.x> -50 && b.x < canvas.width+50 && b.y > -50 && b.y < canvas.height+50);
     bullets.forEach(b=>{
       ships.forEach(s=>{
@@ -3448,6 +3672,57 @@ function loop(t){
       ctx.fillStyle = halo;
       ctx.beginPath();
       ctx.ellipse(0,0,length*0.52,radius*1.6,0,0,Math.PI*2);
+      ctx.fill();
+      ctx.restore();
+    } else if(style === 'violetFlame'){
+      const length = b.projectile.length || 48;
+      const width = b.projectile.width || 18;
+      const core = b.projectile.core || [255,230,255];
+      const mid = b.projectile.mid || [210,150,255];
+      const outer = b.projectile.outer || [120,60,200];
+      const flareRadius = b.projectile.flareRadius || 18;
+      const angle = Math.atan2(b.dy, b.dx);
+      const timeNow = (typeof performance !== 'undefined' && performance.now) ? performance.now() : Date.now();
+      const phase = b.seed || 0;
+      const pulse = 0.85 + 0.2 * Math.sin(timeNow * 0.02 + phase);
+      const flameWidth = width * pulse;
+      ctx.save();
+      ctx.translate(b.x, b.y);
+      ctx.rotate(angle);
+      const sheath = ctx.createLinearGradient(-length, 0, 0, 0);
+      sheath.addColorStop(0, rgba(outer, 0));
+      sheath.addColorStop(0.2, rgba(outer, 0.35));
+      sheath.addColorStop(0.5, rgba(mid, 0.65));
+      sheath.addColorStop(1, rgba(core, 0.95));
+      ctx.fillStyle = sheath;
+      ctx.beginPath();
+      ctx.moveTo(-length, -flameWidth * 0.65);
+      ctx.quadraticCurveTo(-length * 0.25, -flameWidth * 1.05, -length * 0.08, -flameWidth * 0.65);
+      ctx.lineTo(0, -flameWidth * 0.18);
+      ctx.lineTo(0, flameWidth * 0.18);
+      ctx.quadraticCurveTo(-length * 0.08, flameWidth * 0.65, -length, flameWidth * 0.65);
+      ctx.closePath();
+      ctx.fill();
+      const innerWidth = flameWidth * 0.5;
+      const coreGrad = ctx.createLinearGradient(-length * 0.55, 0, 0, 0);
+      coreGrad.addColorStop(0, rgba(mid, 0));
+      coreGrad.addColorStop(0.55, rgba(mid, 0.55));
+      coreGrad.addColorStop(1, rgba(core, 0.95));
+      ctx.fillStyle = coreGrad;
+      ctx.beginPath();
+      ctx.moveTo(-length * 0.55, -innerWidth * 0.95);
+      ctx.quadraticCurveTo(-length * 0.18, -innerWidth * 1.25, 0, -innerWidth * 0.2);
+      ctx.lineTo(0, innerWidth * 0.2);
+      ctx.quadraticCurveTo(-length * 0.18, innerWidth * 1.25, -length * 0.55, innerWidth * 0.95);
+      ctx.closePath();
+      ctx.fill();
+      const flare = ctx.createRadialGradient(0, 0, 0, 0, 0, flareRadius * (0.9 + pulse * 0.25));
+      flare.addColorStop(0, rgba(core, 0.95));
+      flare.addColorStop(0.45, rgba(mid, 0.45));
+      flare.addColorStop(1, 'rgba(0,0,0,0)');
+      ctx.fillStyle = flare;
+      ctx.beginPath();
+      ctx.arc(0, 0, flareRadius * (0.9 + pulse * 0.25), 0, Math.PI*2);
       ctx.fill();
       ctx.restore();
     } else if(style === 'plasmaOrb'){
