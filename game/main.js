@@ -299,7 +299,8 @@ const SHIP_TYPES = [
       damage:14
     }
   },
-  createPlaceholderShip({id:'deathousemen', name:'Deathousemen', classLabel:'Night Siege Frame', color:'#4c3a52', spriteAngleOffset:Math.PI/2}),
+  createPlaceholderShip({id:'deathousemen', name:'Deathousemen', classLabel:'Night Siege Frame', color:'#4c3a52', spriteAngleOffset:Math.PI/2,
+    trailColors:{core:[255,160,140],mid:[180,70,60]}}),
   createPlaceholderShip({id:'shamen', name:'Shamen', classLabel:'Mystic Skiff', color:'#5a9c68'}),
   createPlaceholderShip({id:'barack', name:'Barack', classLabel:'Dynasty Carrier', color:'#f4c2ff'}),
   {id:'obisdian_circuit',name:'Obsidian Circuit',classLabel:'Graviton Warhost',size:32,speed:110,hp:260,fireRate:220,color:'#4d566c',spriteAngleOffset:Math.PI/2,spriteScale:0.15,overlayRotation:180,requireTriggerReset:true,trailColors:{core:[255,80,80],mid:[140,30,30]},
@@ -334,7 +335,8 @@ const SHIP_TYPES = [
     }
   },
   createPlaceholderShip({id:'obamination', name:'Obamination', classLabel:'Absolution Hull', color:'#ff8c7a'}),
-  createPlaceholderShip({id:'phantom', name:'Phantom', classLabel:'Veiled Corvette', color:'#9ad5d8'}),
+  createPlaceholderShip({id:'phantom', name:'Phantom', classLabel:'Veiled Corvette', color:'#9ad5d8', size:26, spriteScale:0.12,
+    trailColors:{core:[220,180,255],mid:[130,70,210]}}),
   createPlaceholderShip({id:'taftian', name:'Taftian', classLabel:'Tribunal Cruiser', color:'#d3ab80'}),
   createPlaceholderShip({id:'khanite', name:'Khanite', classLabel:'Heir Apparent', color:'#c47b3f'}),
   createPlaceholderShip({id:'cabal', name:'Cabal', classLabel:'Cabal Doctrine', color:'#6e5a94'}),
