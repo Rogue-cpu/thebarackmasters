@@ -271,7 +271,37 @@ const SHIP_TYPES = [
   createPlaceholderShip({id:'deathousemen', name:'Deathousemen', classLabel:'Night Siege Frame', color:'#4c3a52'}),
   createPlaceholderShip({id:'shamen', name:'Shamen', classLabel:'Mystic Skiff', color:'#5a9c68'}),
   createPlaceholderShip({id:'barack', name:'Barack', classLabel:'Dynasty Carrier', color:'#f4c2ff'}),
-  createPlaceholderShip({id:'obisdian_circuit', name:'Obisdian Circuit', classLabel:'Circuit Judge', color:'#4d566c'}),
+  {id:'obisdian_circuit',name:'Obsidian Circuit',classLabel:'Graviton Warhost',size:32,speed:110,hp:260,fireRate:220,color:'#4d566c',spriteAngleOffset:Math.PI/2,spriteScale:0.15,overlayRotation:180,requireTriggerReset:true,trailColors:{core:[255,80,80],mid:[140,30,30]},
+    special:{
+      type:'scarletPulse',
+      cost:32,
+      cooldown:8.5,
+      radius:220,
+      duration:1.6,
+      expandTime:0.45,
+      damagePerSecond:140
+    },
+    projectile:{
+      style:'voidOrb',
+      radius:18,
+      aura:[255,60,60],
+      shell:[70,0,0],
+      core:[255,140,120],
+      embers:[255,200,200],
+      channelHold:true,
+      channelSpeed:260,
+      channelAccel:860,
+      releaseDamp:0.35,
+      driftDrag:0.97,
+      gravityRadius:190,
+      pullStrength:240,
+      impactRadius:30,
+      speed:240,
+      ttl:9,
+      muzzleOffset:26,
+      damage:34
+    }
+  },
   createPlaceholderShip({id:'obamination', name:'Obamination', classLabel:'Absolution Hull', color:'#ff8c7a'}),
   createPlaceholderShip({id:'phantom', name:'Phantom', classLabel:'Veiled Corvette', color:'#9ad5d8'}),
   createPlaceholderShip({id:'taftian', name:'Taftian', classLabel:'Tribunal Cruiser', color:'#d3ab80'}),
@@ -1016,6 +1046,15 @@ function deriveShipAvatarState(ship, now){
 const keys = {w:false,a:false,s:false,d:false,space:false,shift:false};
 let currentSector = {sx:0,sy:0};
 
+function freezeChannelBulletsFor(ship){
+  if(!ship) return;
+  bullets.forEach(b=>{
+    if(!b || b.channelShip !== ship) return;
+    if(!b.projectile || !b.projectile.channelHold) return;
+    b.channelFrozen = true;
+  });
+}
+
 function makeSectorKey(sx, sy){
   return `${sx}|${sy}`;
 }
@@ -1056,7 +1095,11 @@ window.addEventListener('keyup',(e)=>{
   if(e.key==='ArrowDown'){ keys.s=false; e.preventDefault(); }
   if(e.key==='d') keys.d=false;
   if(e.key==='ArrowRight'){ keys.d=false; e.preventDefault(); }
-  if(e.code==='Space') keys.space=false;
+  if(e.code==='Space'){
+    keys.space=false;
+    const playerShip = ships ? ships.find(s=> s && s.control) : null;
+    freezeChannelBulletsFor(playerShip);
+  }
   if(e.key==='Shift' || e.code==='ShiftLeft' || e.code==='ShiftRight') keys.shift=false;
 });
 
@@ -1088,6 +1131,8 @@ class Ship{
     this.specialCooldown = 0;
     this.specialLatch = false;
     this.projectileConfig = type.projectile || null;
+    this.requireTriggerReset = !!type.requireTriggerReset;
+    this.fireLatch = false;
     this.ai = this.control ? null : {
       mode: 'approach',
       timer: 0,
@@ -1139,7 +1184,15 @@ class Ship{
       if(sp > this.maxSpeed){ this.vx = this.vx/sp * this.maxSpeed; this.vy = this.vy/sp * this.maxSpeed; }
       this.x += this.vx*dt; this.y += this.vy*dt;
       this.cool -= dt*1000;
-      if(keys.space && this.cool<=0){
+      const wantsFire = keys.space;
+      const shotReady = this.cool <= 0;
+      if(this.requireTriggerReset){
+        if(wantsFire && !this.fireLatch && shotReady){
+          if(this.shoot(this.angle)) this.cool = this.getFireCooldown();
+          this.fireLatch = true;
+        }
+        if(!wantsFire) this.fireLatch = false;
+      } else if(wantsFire && shotReady){
         if(this.shoot(this.angle)) this.cool = this.getFireCooldown();
       }
       if(keys.shift){
@@ -1980,7 +2033,7 @@ class Ship{
     const damage = projectile.damage != null ? projectile.damage : 12;
     const originX = this.x + Math.cos(angle) * muzzleOffset;
     const originY = this.y + Math.sin(angle) * muzzleOffset;
-    bullets.push({
+    const bullet = {
       x: originX,
       y: originY,
       dx: Math.cos(angle)*speed,
@@ -1991,7 +2044,13 @@ class Ship{
       raceId: this.type.id,
       projectile,
       seed: Math.random()*Math.PI*2
-    });
+    };
+    if(projectile && projectile.channelHold){
+      bullet.channelShip = this;
+      bullet.released = !this.control;
+      bullet.channelFrozen = false;
+    }
+    bullets.push(bullet);
     if(this.type && this.type.projectile && this.type.projectile.recoil){
       const recoil = this.type.projectile.recoil;
       this.vx -= Math.cos(angle) * recoil;
@@ -3457,6 +3516,43 @@ function loop(t){
         b.dx *= drag;
         b.dy *= drag;
       }
+      if(b.projectile && b.projectile.channelHold){
+        const holding = b.channelShip && b.channelShip.hp>0 && b.channelShip.control && keys.space && !b.channelFrozen;
+        if(holding){
+          const targetSpeed = b.projectile.channelSpeed || b.projectile.speed || Math.hypot(b.dx,b.dy) || 180;
+          const current = Math.max(10, Math.hypot(b.dx,b.dy));
+          if(current < targetSpeed){
+            const heading = Math.atan2(b.dy, b.dx) || 0;
+            const accel = b.projectile.channelAccel || 800;
+            b.dx += Math.cos(heading) * accel * dt;
+            b.dy += Math.sin(heading) * accel * dt;
+          }
+          b.released = false;
+        } else if(!b.released){
+          b.released = true;
+          const damp = b.projectile.releaseDamp || 0.4;
+          b.dx *= damp;
+          b.dy *= damp;
+        } else {
+          if(b.channelFrozen){
+            const drift = b.projectile.freezeDrift || 0.92;
+            const bias = b.projectile.freezeBias || 0.08;
+            const heading = Math.atan2(b.dy, b.dx) || 0;
+            const speed = Math.hypot(b.dx, b.dy) || (b.projectile.speed || 200);
+            const target = speed * bias;
+            const vx = Math.cos(heading) * target;
+            const vy = Math.sin(heading) * target;
+            b.dx = lerp(b.dx, vx, 0.08);
+            b.dy = lerp(b.dy, vy, 0.08);
+            b.dx *= drift;
+            b.dy *= drift;
+          } else {
+            const drift = b.projectile.driftDrag || 0.97;
+            b.dx *= drift;
+            b.dy *= drift;
+          }
+        }
+      }
       b.x += b.dx*dt;
       b.y += b.dy*dt;
       b.ttl -= dt;
@@ -3466,6 +3562,25 @@ function loop(t){
       ships.forEach(s=>{
         if(s.team!==b.team && s.hp>0 && !s.isWarping()){
           const d = Math.hypot(b.x-s.x,b.y-s.y);
+          if(b.projectile && b.projectile.style === 'voidOrb'){
+            const gravityRadius = b.projectile.gravityRadius || 190;
+            const pullStrength = b.projectile.pullStrength || 200;
+            const impactRadius = b.projectile.impactRadius || Math.max(24, s.size*0.55);
+            const orbActive = !b.projectile.channelHold || b.released || !b.channelShip || !b.channelShip.control;
+            if(orbActive && d < gravityRadius){
+              const intensity = 1 - Math.min(1, d / gravityRadius);
+              const norm = d || 1;
+              const pull = pullStrength * intensity * dt;
+              s.vx += (b.x - s.x)/norm * pull;
+              s.vy += (b.y - s.y)/norm * pull;
+              if(d <= impactRadius){
+                const impactDamage = b.projectile.damage || b.damage || 18;
+                applyDamage(s, impactDamage);
+                b.ttl = 0;
+                return;
+              }
+            }
+          }
           if(d < s.size){
             const damage = b.damage != null ? b.damage : ((b.projectile && b.projectile.damage) || 12);
             applyDamage(s, damage);
@@ -3724,6 +3839,51 @@ function loop(t){
       ctx.beginPath();
       ctx.arc(0, 0, flareRadius * (0.9 + pulse * 0.25), 0, Math.PI*2);
       ctx.fill();
+      ctx.restore();
+    } else if(style === 'voidOrb'){
+      const radius = b.projectile.radius || 18;
+      const shell = b.projectile.shell || [60,0,0];
+      const core = b.projectile.core || [255,80,80];
+      const aura = b.projectile.aura || [255,40,40];
+      const embers = b.projectile.embers || [255,180,180];
+      const pulse = 0.6 + 0.35 * Math.sin((performance.now ? performance.now() : Date.now()) * 0.01 + (b.seed || 0));
+      ctx.save();
+      ctx.translate(b.x, b.y);
+      ctx.globalCompositeOperation = 'lighter';
+      const glow = ctx.createRadialGradient(0,0,radius*0.4,0,0,radius*2.2);
+      glow.addColorStop(0, rgba(core, 0.95));
+      glow.addColorStop(0.4, rgba(aura, 0.45));
+      glow.addColorStop(1, 'rgba(0,0,0,0)');
+      ctx.fillStyle = glow;
+      ctx.beginPath();
+      ctx.arc(0,0,radius*2,0,Math.PI*2);
+      ctx.fill();
+      ctx.globalCompositeOperation = 'source-over';
+      const body = ctx.createRadialGradient(0,0,radius*0.1,0,0,radius*1.1);
+      body.addColorStop(0, rgba(core, 1));
+      body.addColorStop(0.6, rgba(shell, 0.8));
+      body.addColorStop(1, rgba(shell, 0.05));
+      ctx.fillStyle = body;
+      ctx.beginPath();
+      ctx.arc(0,0,radius*(0.95 + pulse*0.1),0,Math.PI*2);
+      ctx.fill();
+      ctx.strokeStyle = `rgba(20,0,0,${0.7 + pulse*0.2})`;
+      ctx.lineWidth = 2.5;
+      ctx.beginPath();
+      ctx.arc(0,0,radius*(0.9 + pulse*0.05),0,Math.PI*2);
+      ctx.stroke();
+      for(let i=0;i<3;i++){
+        const theta = (b.seed || 0) + i*2.1 + pulse*0.5;
+        const emberX = Math.cos(theta) * radius * 1.2;
+        const emberY = Math.sin(theta) * radius * 1.2;
+        const ember = ctx.createRadialGradient(emberX, emberY, 0, emberX, emberY, radius*0.6);
+        ember.addColorStop(0, rgba(embers, 0.9));
+        ember.addColorStop(1, 'rgba(0,0,0,0)');
+        ctx.fillStyle = ember;
+        ctx.beginPath();
+        ctx.arc(emberX, emberY, radius*0.5, 0, Math.PI*2);
+        ctx.fill();
+      }
       ctx.restore();
     } else if(style === 'plasmaOrb'){
       const radius = b.projectile.radius || 10;
