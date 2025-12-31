@@ -57,6 +57,15 @@
             <img id="enemy-ship-img" src="" alt="Enemy ship sprite">
           </div>
           <div class="captain-name" id="enemy-captain-name">Captain ???</div>
+          <div class="status-indicators">
+            <div id="enemy-boarder-indicator" class="status-indicator" aria-live="polite">
+              <div class="status-icon" aria-hidden="true">&#128100;</div>
+              <div class="status-body">
+                <div class="status-title">Boarders <span id="enemy-boarder-count"></span></div>
+                <div class="status-meter"><span id="enemy-boarder-meter"></span></div>
+              </div>
+            </div>
+          </div>
         </div>
         <div class="metric-stack">
           <div id="enemy-battery-grid" class="battery-grid" aria-label="Enemy Battery"></div>

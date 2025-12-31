@@ -19,6 +19,9 @@ const enemyBatteryGridEl = document.getElementById('enemy-battery-grid');
 const playerEnergyTextEl = document.getElementById('hud-batt');
 const enemyEnergyTextEl = document.getElementById('enemy-hud-batt');
 const avatarWrap = document.getElementById('avatar-wrap');
+const enemyBoarderIndicator = document.getElementById('enemy-boarder-indicator');
+const enemyBoarderMeter = document.getElementById('enemy-boarder-meter');
+const enemyBoarderCount = document.getElementById('enemy-boarder-count');
 
 const startBtn = document.getElementById('start');
 const resetBtn = document.getElementById('reset');
@@ -182,7 +185,7 @@ const SHIP_TYPES = [
       muzzleOffset:14
     }
   },
-  {id:'pickle',name:'Pickle',classLabel:'Brine Hive',size:32,speed:130,hp:230,fireRate:520,color:'#8cd96e',spriteAngleOffset:-Math.PI/2,spriteScale:0.16,trailColors:{core:[220,255,190],mid:[110,210,110]},
+  {id:'pickle',name:'Pickle',classLabel:'Brine Hive',size:24,speed:130,hp:230,fireRate:520,color:'#8cd96e',spriteAngleOffset:-Math.PI/2,spriteScale:0.105,trailColors:{core:[220,255,190],mid:[110,210,110]},
     special:{
       type:'pickleHive',
       cost:18,
@@ -267,8 +270,36 @@ const SHIP_TYPES = [
     }
   },
   createPlaceholderShip({id:'criminal', name:'Criminal', classLabel:'Syndicate Prototype', color:'#b36b5c'}),
-  createPlaceholderShip({id:'yuptauri', name:'Yuptauri', classLabel:'Frontier Prototype', color:'#77c5ff'}),
-  createPlaceholderShip({id:'deathousemen', name:'Deathousemen', classLabel:'Night Siege Frame', color:'#4c3a52'}),
+  {id:'yuptauri',name:'Yuptauri',classLabel:'Frontier Boarding Skiff',size:18,speed:175,hp:150,fireRate:360,color:'#77c5ff',spriteAngleOffset:Math.PI/2,spriteScale:0.1,trailColors:{core:[120,255,190],mid:[70,180,220]},energyCapacity:110,energyRegen:18,
+    special:{
+      type:'boardingPods',
+      cost:20,
+      cooldown:11.5,
+      podCount:2,
+      podSpeed:330,
+      podAccel:640,
+      podSpread:0.18,
+      latchRadius:18,
+      boardDuration:7.5,
+      damagePerSecond:16,
+      podGlow:[140,255,190],
+      podShell:[30,120,110]
+    },
+    projectile:{
+      style:'plasmaOrb',
+      radius:10,
+      tailLength:40,
+      tailWidth:18,
+      core:[180,240,255],
+      mid:[120,200,255],
+      rim:[60,130,210],
+      speed:420,
+      ttl:2.1,
+      muzzleOffset:20,
+      damage:14
+    }
+  },
+  createPlaceholderShip({id:'deathousemen', name:'Deathousemen', classLabel:'Night Siege Frame', color:'#4c3a52', spriteAngleOffset:Math.PI/2}),
   createPlaceholderShip({id:'shamen', name:'Shamen', classLabel:'Mystic Skiff', color:'#5a9c68'}),
   createPlaceholderShip({id:'barack', name:'Barack', classLabel:'Dynasty Carrier', color:'#f4c2ff'}),
   {id:'obisdian_circuit',name:'Obsidian Circuit',classLabel:'Graviton Warhost',size:32,speed:110,hp:260,fireRate:220,color:'#4d566c',spriteAngleOffset:Math.PI/2,spriteScale:0.15,overlayRotation:180,requireTriggerReset:true,trailColors:{core:[255,80,80],mid:[140,30,30]},
@@ -1032,6 +1063,25 @@ function updateEnemyAvatarImg(){
   el.src = img && img.src ? img.src : '';
 }
 
+function updateEnemyBoarderHud(ship){
+  if(!enemyBoarderIndicator || !enemyBoarderMeter) return;
+  const entries = ship && Array.isArray(ship.boardingIntruders)
+    ? ship.boardingIntruders.filter(entry=> entry && entry.remaining > 0)
+    : [];
+  if(!entries.length){
+    enemyBoarderIndicator.classList.remove('active');
+    enemyBoarderMeter.style.width = '0%';
+    if(enemyBoarderCount) enemyBoarderCount.textContent = '';
+    return;
+  }
+  const total = entries.reduce((sum,entry)=> sum + Math.max(0, entry.total || 0), 0);
+  const remaining = entries.reduce((sum,entry)=> sum + Math.max(0, entry.remaining || 0), 0);
+  const percent = total > 0 ? Math.max(0, Math.min(1, 1 - (remaining / total))) : 1;
+  enemyBoarderMeter.style.width = `${(percent * 100).toFixed(1)}%`;
+  if(enemyBoarderCount) enemyBoarderCount.textContent = `x${entries.length}`;
+  enemyBoarderIndicator.classList.add('active');
+}
+
 function deriveShipAvatarState(ship, now){
   if(!ship) return 'idle';
   if(ship.activeSpecial) return 'special';
@@ -1142,6 +1192,7 @@ class Ship{
     };
     this.damageOverTime = [];
     this.crewLossIndicator = null;
+    this.boardingIntruders = [];
   }
   beginWarpFrom(fromX, fromY, duration=0.75){
     const toX = this.x;
@@ -1286,6 +1337,10 @@ class Ship{
       const primed = this.startHumperDash(spec);
       if(!primed) return false;
     }
+    if(spec.type === 'boardingPods'){
+      const launched = this.startBoardingPods(spec);
+      if(!launched) return false;
+    }
     const cost = conf.cost || 0;
     if(cost > 0){
       this.energy = Math.max(0, this.energy - cost);
@@ -1334,6 +1389,9 @@ class Ship{
         break;
       case 'humperDash':
         this.updateHumperDash(spec, dt);
+        break;
+      case 'boardingPods':
+        this.updateBoardingPods(spec, dt);
         break;
       case 'furnaceFuel':
         // instant effect handled on activation
@@ -1604,6 +1662,153 @@ class Ship{
     } else {
       turret.targetPos = null;
     }
+  }
+  startBoardingPods(spec){
+    const conf = spec.config || this.specialConfig || {};
+    const podCount = Math.max(1, Math.round(conf.podCount || 2));
+    const enemies = ships.filter(s=> s && s.team !== this.team && s.hp>0 && !s.isWarping());
+    if(!enemies.length){
+      spec.forceEnd = true;
+      return false;
+    }
+    spec.pods = [];
+    for(let i=0;i<podCount;i++){
+      const target = enemies[i % enemies.length];
+      if(!target) continue;
+      const spread = (i - (podCount-1)/2) * (conf.podSpread || 0.15);
+      const heading = this.angle + spread;
+      const spawnRadius = this.size * 0.85;
+      spec.pods.push({
+        state:'launch',
+        x: this.x + Math.cos(heading) * spawnRadius,
+        y: this.y + Math.sin(heading) * spawnRadius,
+        vx: this.vx,
+        vy: this.vy,
+        target,
+        colorSeed: Math.random()*Math.PI*2,
+        attachOffsetX: 0,
+        attachOffsetY: 0,
+        indicator: null
+      });
+    }
+    spec.forceEnd = false;
+    spec.duration = Infinity;
+    return spec.pods.length > 0;
+  }
+  updateBoardingPods(spec, dt){
+    const conf = spec.config || this.specialConfig || {};
+    const podAccel = conf.podAccel || 600;
+    const podSpeed = conf.podSpeed || 320;
+    const latchRadius = conf.latchRadius || 18;
+    const dps = conf.damagePerSecond || 14;
+    const pods = spec.pods || [];
+    if(!pods.length){
+      spec.forceEnd = true;
+      return;
+    }
+    pods.forEach(pod=>{
+      if(pod.finished) return;
+      const target = pod.target;
+      if(!target || target.hp <= 0 || (target.isWarping && target.isWarping())){
+        this.releaseBoardingPod(pod);
+        return;
+      }
+      if(pod.state === 'launch'){
+        const dx = target.x - pod.x;
+        const dy = target.y - pod.y;
+        const dist = Math.hypot(dx, dy) || 1;
+        pod.vx += (dx / dist) * podAccel * dt;
+        pod.vy += (dy / dist) * podAccel * dt;
+        const speed = Math.hypot(pod.vx, pod.vy);
+        if(speed > podSpeed){
+          const scale = podSpeed / speed;
+          pod.vx *= scale;
+          pod.vy *= scale;
+        }
+        pod.x += pod.vx * dt;
+        pod.y += pod.vy * dt;
+        const approach = Math.hypot(target.x - pod.x, target.y - pod.y);
+        if(approach <= (target.size || 16) + latchRadius){
+          this.latchBoardingPod(pod, conf);
+        }
+      } else if(pod.state === 'boarding'){
+        pod.x = target.x + pod.attachOffsetX;
+        pod.y = target.y + pod.attachOffsetY;
+        pod.boardTimer -= dt;
+        if(target.hp > 0) applyDamage(target, dps * dt);
+        if(pod.indicator){
+          pod.indicator.remaining = Math.max(0, pod.indicator.remaining - dt);
+        }
+        if(pod.boardTimer <= 0){
+          this.releaseBoardingPod(pod);
+        }
+      }
+    });
+    spec.pods = pods.filter(pod=> !pod.finished);
+    if(!spec.pods.length){
+      spec.forceEnd = true;
+    }
+  }
+  latchBoardingPod(pod, conf){
+    if(!pod || !pod.target) return;
+    pod.state = 'boarding';
+    const duration = Math.max(1, conf.boardDuration || 6);
+    pod.boardTimer = duration;
+    const attachRadius = (pod.target.size || 18) + 4;
+    const angle = Math.atan2(pod.target.y - pod.y, pod.target.x - pod.x);
+    pod.attachOffsetX = Math.cos(angle) * attachRadius;
+    pod.attachOffsetY = Math.sin(angle) * attachRadius;
+    pod.x = pod.target.x + pod.attachOffsetX;
+    pod.y = pod.target.y + pod.attachOffsetY;
+    pod.indicator = createBoardingIndicator(duration);
+    if(pod.target.boardingIntruders){
+      pod.target.boardingIntruders.push(pod.indicator);
+    }
+  }
+  releaseBoardingPod(pod){
+    if(!pod) return;
+    if(pod.indicator && pod.target){
+      removeBoardingIndicator(pod.target, pod.indicator);
+    }
+    pod.finished = true;
+  }
+  drawBoardingPods(ctx, spec){
+    if(!spec.pods || !spec.pods.length) return;
+    const conf = spec.config || this.specialConfig || {};
+    const shell = conf.podShell || [40,160,130];
+    const glow = conf.podGlow || [140,255,190];
+    spec.pods.forEach(pod=>{
+      ctx.save();
+      ctx.translate(pod.x, pod.y);
+      const angle = pod.state === 'boarding'
+        ? Math.atan2(pod.attachOffsetY, pod.attachOffsetX)
+        : Math.atan2(pod.vy || 0.001, pod.vx || 0.001);
+      ctx.rotate(angle);
+      const length = pod.state === 'boarding' ? 10 : 16;
+      const radius = 4.5;
+      ctx.globalAlpha = 0.95;
+      ctx.fillStyle = rgba(shell, 0.9);
+      ctx.beginPath();
+      ctx.ellipse(0,0,length,radius,0,0,Math.PI*2);
+      ctx.fill();
+      ctx.globalAlpha = 1;
+      const grad = ctx.createRadialGradient(0,0,0,0,0,length*1.3);
+      grad.addColorStop(0, rgba(glow, 0.85));
+      grad.addColorStop(1, 'rgba(0,0,0,0)');
+      ctx.fillStyle = grad;
+      ctx.beginPath();
+      ctx.arc(0,0,length,0,Math.PI*2);
+      ctx.fill();
+      if(pod.state === 'boarding' && pod.target){
+        ctx.strokeStyle = rgba(glow, 0.4);
+        ctx.lineWidth = 1.4;
+        ctx.beginPath();
+        ctx.moveTo(0,0);
+        ctx.lineTo(-pod.attachOffsetX, -pod.attachOffsetY);
+        ctx.stroke();
+      }
+      ctx.restore();
+    });
   }
   startHumperDash(spec){
     const conf = spec.config || this.specialConfig || {};
@@ -2231,6 +2436,9 @@ class Ship{
         break;
       case 'humperDash':
         this.drawHumperDash(ctx, spec);
+        break;
+      case 'boardingPods':
+        this.drawBoardingPods(ctx, spec);
         break;
       default:
         break;
@@ -3348,6 +3556,18 @@ function applyDamage(ship, amount){
   }
 }
 
+function createBoardingIndicator(total){
+  return {
+    total: Math.max(0.1, total || 1),
+    remaining: Math.max(0.1, total || 1)
+  };
+}
+
+function removeBoardingIndicator(ship, indicator){
+  if(!ship || !ship.boardingIntruders || !indicator) return;
+  ship.boardingIntruders = ship.boardingIntruders.filter(entry=> entry !== indicator);
+}
+
 function spawnBattle(){
   ships = []; bullets = [];
   fighters = [];
@@ -3688,6 +3908,7 @@ function loop(t){
     if(enemyAvatarVictoryLock) enemyAvatarState = 'victory';
     else enemyAvatarState = deriveShipAvatarState(e, now);
     updateEnemyAvatarImg();
+    updateEnemyBoarderHud(e);
   } else {
     if(enemyCrewBarEl) enemyCrewBarEl.innerHTML = '';
     if(enemyBatteryGridEl) enemyBatteryGridEl.innerHTML = '';
@@ -3695,6 +3916,7 @@ function loop(t){
     currentEnemyRace = null;
     enemyAvatarState = enemyAvatarVictoryLock ? 'victory' : 'idle';
     updateEnemyAvatarImg();
+    updateEnemyBoarderHud(null);
   }
   if(running){
     const aliveA = ships.some(s=>s.team==='A' && s.hp>0);
