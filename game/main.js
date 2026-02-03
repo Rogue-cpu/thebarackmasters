@@ -4350,7 +4350,7 @@ if(eventTestToggleBtn && eventTestPanel){
 }
 // avatar assets and audio cues
 const AVATAR_STATES = ['idle','thrust','left','right','fire','special','victory'];
-const AVATAR_IMAGE_EXTENSIONS = ['png','webp','jpg','jpeg'];
+const AVATAR_IMAGE_EXTENSIONS = ['png','webp','jpg','jpeg','gif'];
 const AVATARS = {}; // raceId -> {state: Image}
 let avatarState = 'idle';
 let enemyAvatarState = 'idle';
