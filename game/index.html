@@ -3,16 +3,31 @@
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width,initial-scale=1" />
-  <title>Ur-Quan Super Melee — Demo</title>
+  <title>The Barack Masters</title>
   <link rel="stylesheet" href="style.css">
 </head>
-<body>
-  <div id="ui">
-    <h1>Ur-Quan Super Melee — Demo</h1>
-    <div class="control-bar">
-      <button id="start">Start Battle</button>
-      <button id="reset">Reset</button>
+<body class="menu-active">
+  <div id="subfaction-modal" class="overlay hidden">
+    <div class="overlay-card" id="subfaction-modal-card">
+      <h2 id="subfaction-modal-title">Select Subfaction / Skin</h2>
+      <div id="subfaction-modal-options"></div>
+      <button id="subfaction-modal-close" class="overlay-close">&times;</button>
     </div>
+  </div>
+  <div id="main-menu" class="menu-overlay">
+    <div class="menu-fullscreen">
+      <h1 id="menu-title" class="menu-title">THE BARACK MASTERS</h1>
+      <p class="menu-subtitle">Launch the simulator or reset the arena. Press Esc anytime to toggle this console.</p>
+      <div class="menu-actions menu-actions-full">
+        <button id="menu-start">SUPER MELEE</button>
+        <button id="menu-multiplayer">MULTIPLAYER</button>
+        <button id="menu-settings">SETTINGS</button>
+        <button id="menu-credits">CREDITS</button>
+        <button id="menu-reset">RESET</button>
+      </div>
+    </div>
+  </div>
+  <div id="ui">
     <!-- Player panel -->
     <div id="player-panel" class="side-panel">
       <div class="panel-title"><span id="player-race-label">Servos</span></div>
@@ -65,6 +80,13 @@
                 <div class="status-meter"><span id="enemy-boarder-meter"></span></div>
               </div>
             </div>
+            <div id="enemy-parasite-indicator" class="status-indicator" aria-live="polite">
+              <div class="status-icon" aria-hidden="true">&#129440;</div>
+              <div class="status-body">
+                <div class="status-title">Parasites <span id="enemy-parasite-count"></span></div>
+                <div class="status-meter"><span id="enemy-parasite-meter"></span></div>
+              </div>
+            </div>
           </div>
         </div>
         <div class="metric-stack">
@@ -83,17 +105,204 @@
     </div>
   </div>
   <canvas id="game"></canvas>
+  <div id="event-test-panel" class="event-test-panel" aria-label="Secret event test panel">
+    <div class="event-test-header">
+      <div class="event-test-title">Easter Egg Events</div>
+      <button id="event-test-toggle" type="button" class="event-test-toggle" aria-expanded="true" aria-controls="event-test-content">Hide</button>
+    </div>
+    <div id="event-test-content" class="event-test-content">
+      <div class="event-test-row">Secret roll: <span id="secret-roll-value">—</span></div>
+      <div class="event-test-actions">
+        <button id="trigger-horror-event" type="button">Trigger Horror Event</button>
+        <button id="end-horror-event" type="button" class="ghost">End Event</button>
+      </div>
+    </div>
+  </div>
   <div id="ship-overlay" class="overlay hidden">
     <div class="overlay-card">
-      <h2>Ready Your Ship</h2>
-      <p>Select a craft to deploy. The enemy will scramble a random counter ship.</p>
+      <h2>Assemble Your Fleets</h2>
+      <p>Build two strike groups, then launch a multi-ship Super Melee. Each defeat removes that hull from its roster.</p>
+      <div id="team-status" class="team-status" role="status" aria-live="polite"></div>
+      <div class="fleet-builder">
+        <section class="fleet-column" aria-labelledby="fleet-a-title">
+          <div class="fleet-column-head">
+            <h3 id="fleet-a-title">Balanced Team 1</h3>
+            <span class="fleet-count" id="team-count-a">0</span>
+          </div>
+          <div class="fleet-roster" id="team-roster-a" aria-live="polite"></div>
+          <div class="fleet-column-actions draft-only">
+            <button id="team-add-a">Add Selected Ship</button>
+            <button id="team-clear-a" class="ghost">Clear</button>
+          </div>
+        </section>
+        <section class="fleet-column" aria-labelledby="fleet-b-title">
+          <div class="fleet-column-head">
+            <h3 id="fleet-b-title">Balanced Team 2</h3>
+            <span class="fleet-count" id="team-count-b">0</span>
+          </div>
+          <div class="fleet-roster" id="team-roster-b" aria-live="polite"></div>
+          <div class="fleet-column-actions draft-only">
+            <button id="team-add-b">Add Selected Ship</button>
+            <button id="team-clear-b" class="ghost">Clear</button>
+          </div>
+        </section>
+        <aside class="fleet-side-panel">
+          <div class="side-panel-section">
+            <h4>Team 1 Control</h4>
+            <button class="side-panel-mode-cycler" id="team1-mode-cycler" tabindex="0" aria-label="Cycle Team 1 Control Mode">
+              <img src="../ChatGPT Image Jan 8, 2026, 06_47_54 AM.png" alt="Team 1 Control Mode" class="mode-cycler-img" id="team1-mode-img">
+            </button>
+          </div>
+          <div class="side-panel-section">
+            <h4>Team 2 Control</h4>
+            <button class="side-panel-mode-cycler" id="team2-mode-cycler" tabindex="0" aria-label="Cycle Team 2 Control Mode">
+              <img src="../ChatGPT Image Jan 8, 2026, 06_47_54 AM.png" alt="Team 2 Control Mode" class="mode-cycler-img" id="team2-mode-img">
+            </button>
+          </div>
+          <div class="side-panel-section">
+            <button class="side-panel-btn start-btn" id="side-panel-start">BATTLE</button>
+          </div>
+        </aside>
+      </div>
+      <p class="fleet-tip">Select a hull from the <span id="grid-secret-trigger" class="grid-secret-trigger" role="button" tabindex="0" aria-label="Unlock">GRID</span> below, then place it into either roster. Fleets fight in the order listed.</p>
       <div id="ship-grid" class="ship-grid"></div>
       <div class="overlay-actions">
         <button id="overlay-cancel">Cancel</button>
-        <button id="overlay-start">Start Battle</button>
+        <button id="overlay-random" class="ghost">Random Reserve</button>
+        <button id="overlay-start">Launch Fleet Battle</button>
+      </div>
+    </div>
+  </div>
+  <div id="easter-egg-overlay" class="overlay hidden" aria-hidden="true">
+    <div class="overlay-card profile-card" role="dialog" aria-modal="true" aria-labelledby="easter-egg-title">
+      <button class="overlay-close" id="easter-egg-close" aria-label="Close unlock overlay">&times;</button>
+      <h2 id="easter-egg-title">Unlock</h2>
+      <p>Enter passphrase.</p>
+      <div class="profile-error" id="easter-egg-error" role="alert" aria-live="polite"></div>
+      <form id="easter-egg-form" class="profile-form">
+        <label>
+          <span>Password</span>
+          <input id="easter-egg-password" name="password" type="password" autocomplete="off" required>
+        </label>
+      </form>
+      <div class="overlay-actions">
+        <button id="easter-egg-cancel" type="button" class="ghost">Cancel</button>
+        <button id="easter-egg-unlock" type="button">Unlock</button>
+      </div>
+    </div>
+  </div>
+  <div id="lore-popover" class="lore-popover hidden" role="dialog" aria-modal="true" aria-labelledby="lore-title">
+    <div class="lore-panel">
+      <button id="lore-close" class="lore-close" aria-label="Close lore panel">&times;</button>
+      <h3 id="lore-title"></h3>
+      <p id="lore-text"></p>
+    </div>
+  </div>
+  <div id="profile-overlay" class="overlay hidden" aria-hidden="true">
+    <div class="overlay-card profile-card" role="dialog" aria-modal="true" aria-labelledby="profile-title">
+      <button class="overlay-close" id="profile-close" aria-label="Close profile overlay">&times;</button>
+      <h2 id="profile-title">Commander Profile</h2>
+      <p>Authenticate with a callsign and passphrase to access multiplayer lobbies. No email required—keep it old school.</p>
+      <div class="profile-status-banner" id="profile-status-banner">Not signed in</div>
+      <form id="profile-form" class="profile-form">
+        <label>
+          <span>Username</span>
+          <input id="profile-username" name="username" autocomplete="username" maxlength="24" required>
+        </label>
+        <label>
+          <span>Password</span>
+          <input id="profile-password" name="password" type="password" autocomplete="current-password" required>
+        </label>
+        <div id="profile-error" class="profile-error" role="alert"></div>
+        <div class="profile-actions">
+          <button type="button" id="profile-signup">Create Account</button>
+          <button type="button" id="profile-login">Log In</button>
+        </div>
+      </form>
+      <div class="profile-footer">
+        <button type="button" id="profile-logout" class="ghost">Log Out</button>
+      </div>
+    </div>
+  </div>
+  <div id="multiplayer-overlay" class="overlay hidden" aria-hidden="true">
+    <div class="overlay-card lobby-card" role="dialog" aria-modal="true" aria-labelledby="lobby-title">
+      <button class="overlay-close" id="lobby-close" aria-label="Close multiplayer overlay">&times;</button>
+      <h2 id="lobby-title">Fleet Lobbies</h2>
+      <p>Browse open rooms, rally your fleet, and signal when you are ready for a live duel.</p>
+      <header class="lobby-header">
+        <div class="lobby-pill">
+          <span id="lobby-user-label">Not signed in</span>
+          <button type="button" id="lobby-open-profile" class="pill-link">Profile</button>
+        </div>
+        <div class="lobby-header-actions">
+          <input id="lobby-name-input" type="text" placeholder="Lobby name" maxlength="32">
+          <button type="button" id="lobby-create">Create Lobby</button>
+          <button type="button" id="lobby-refresh" class="ghost">Refresh</button>
+        </div>
+      </header>
+      <div class="lobby-body">
+        <section id="lobby-list-view" class="lobby-section">
+          <div class="section-head">
+            <h3>Open Lobbies</h3>
+            <span id="lobby-count" class="count-pill">0</span>
+          </div>
+          <div id="lobby-list" class="lobby-list" role="list"></div>
+          <p id="lobby-empty" class="lobby-empty">No active lobbies. Start one!</p>
+        </section>
+        <section id="lobby-room-view" class="lobby-section hidden">
+          <div class="room-meta">
+            <div>
+              <h3 id="room-name">Lobby</h3>
+              <p id="room-status" class="room-status">Status: waiting</p>
+            </div>
+            <div class="room-actions">
+              <button type="button" id="lobby-leave" class="ghost">Leave Lobby</button>
+              <button type="button" id="lobby-ready" class="accent">Ready Up</button>
+            </div>
+          </div>
+          <div class="room-players">
+            <div class="room-player" data-role="host">
+              <div class="room-player-head">
+                <span class="label">Host</span>
+                <strong id="host-name">—</strong>
+              </div>
+              <div class="room-player-ready" id="host-ready">Not ready</div>
+              <div class="room-player-fleet" id="host-fleet"></div>
+            </div>
+            <div class="room-player" data-role="guest">
+              <div class="room-player-head">
+                <span class="label">Guest</span>
+                <strong id="guest-name">—</strong>
+              </div>
+              <div class="room-player-ready" id="guest-ready">Waiting for pilot</div>
+              <div class="room-player-fleet" id="guest-fleet"></div>
+            </div>
+          </div>
+          <div class="room-fleet-config">
+            <div class="section-head">
+              <h4>Your Fleet</h4>
+              <button type="button" id="random-fleet" class="ghost">Randomize</button>
+            </div>
+            <div id="fleet-form" class="fleet-form"></div>
+            <div class="room-fleet-actions">
+              <button type="button" id="sync-fleet">Sync Fleet</button>
+            </div>
+          </div>
+          <div class="room-chat">
+            <div class="section-head">
+              <h4>Comms</h4>
+            </div>
+            <div id="chat-log" class="chat-log" aria-live="polite"></div>
+            <form id="chat-form" class="chat-form">
+              <input id="chat-input" type="text" placeholder="Send a message" autocomplete="off">
+              <button type="submit">Send</button>
+            </form>
+          </div>
+        </section>
       </div>
     </div>
   </div>
   <script src="main.js"></script>
+<script src="mainMenuMusic.js"></script>
 </body>
 </html>

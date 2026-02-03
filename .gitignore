@@ -1,3 +1,21 @@
+# Node modules
+node_modules/
+
+# VS Code settings
+.vscode/
+
+# SQLite files and WAL/SHM
+*.sqlite
+*.sqlite-shm
+*.sqlite-wal
+
+# Large asset folders
+/game/assets/music/
+/game/assets/sfx/
+/game/assets/avatars/
+
+# Server data
+/server/data/
 node_modules/
 .DS_Store
 Thumbs.db
