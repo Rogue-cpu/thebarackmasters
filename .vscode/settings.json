@@ -1,0 +1,24 @@
+{
+  "files.watcherExclude": {
+    "**/node_modules/**": true,
+    "**/game/assets/**": true,
+    "**/server/data/**": true,
+    "**/*.sqlite*": true,
+    "**/.git/**": true
+  },
+  "search.exclude": {
+    "**/node_modules": true,
+    "**/game/assets": true,
+    "**/server/data": true,
+    "**/*.sqlite*": true
+  },
+  "files.exclude": {
+    "**/game/assets/music": true,
+    "**/game/assets/sfx": true,
+    "**/game/assets/avatars": true,
+    "**/server/data": true
+  },
+  "typescript.disableAutomaticTypeAcquisition": true,
+  "typescript.tsserver.maxTsServerMemory": 4096,
+  "javascript.suggest.enabled": false
+}
