@@ -1195,7 +1195,7 @@ const SHIP_TYPES = [
   {id:'obsidian_circuit',name:'Obsidian Circuit',classLabel:'Graviton Warhost',size:32,speed:110,hp:260,fireRate:220,color:'#4d566c',spriteAngleOffset:Math.PI/2,spriteScale:0.15,overlayRotation:180,requireTriggerReset:true,trailColors:{core:[255,80,80],mid:[140,30,30]},
     faction:'Obsidian Circuit',
     factionIcon:'assets/ships/obsidian_circuit/Obsidiancircuit.png',
-    spriteFile:'assets/ships/obsidian_circuit/Obsidiancircuit.png',
+    spriteFile:'assets/ships/obisdian_circuit.png',
     special:{
       type:'scarletPulse',
       cost:32,
