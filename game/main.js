@@ -4637,8 +4637,8 @@ function ensureSfxForRace(raceId){
     // Store arrays of Audio templates and let playSfx pick one each time.
     if(raceId === 'khanite' && cue === 'fire'){
       const variants = [
-        '../Weap_fire_gmissile_02.ogg',
-        '../Weap_fire_gmissile_03.ogg'
+        'assets/sfx/khanite/Weap_fire_gmissile_02.ogg',
+        'assets/sfx/khanite/Weap_fire_gmissile_03.ogg'
       ].map(src=>{
         const a = new Audio();
         a.preload = 'auto';
@@ -4694,9 +4694,9 @@ function ensureSfxForRace(raceId){
     }
     if(raceId === 'khanite' && (cue === 'split5' || cue === 'split10')){
       const variants = [
-        '../Weap_fire_hydra_l1_01.ogg',
-        '../Weap_fire_hydra_l1_02.ogg',
-        '../Weap_fire_hydra_l1_03.ogg'
+        'assets/sfx/khanite/Weap_fire_hydra_l1_01.ogg',
+        'assets/sfx/khanite/Weap_fire_hydra_l1_02.ogg',
+        'assets/sfx/khanite/Weap_fire_hydra_l1_03.ogg'
       ].map(src=>{
         const a = new Audio();
         a.preload = 'auto';
