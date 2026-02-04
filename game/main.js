@@ -4721,10 +4721,18 @@ function ensureSfxForRace(raceId){
       `assets/sfx/${cue}.mp3`,
       `assets/sfx/${cue}.wav`
     ];
-    // Special case: obsidian_circuit SFX files are confirmed to exist as ogg
+    // Special case: obsidian_circuit SFX files primarily exist as ogg,
+    // but keep mp3/wav fallbacks in case the server setup blocks .ogg
     if(raceId === 'obsidian_circuit') {
       if (cue === 'fire' || cue === 'fly') {
-        sources = [`assets/sfx/obsidian_circuit/${cue}.ogg`];
+        sources = [
+          `assets/sfx/obsidian_circuit/${cue}.ogg`,
+          `assets/sfx/obsidian_circuit/${cue}.mp3`,
+          `assets/sfx/obsidian_circuit/${cue}.wav`,
+          `assets/sfx/${cue}.ogg`,
+          `assets/sfx/${cue}.mp3`,
+          `assets/sfx/${cue}.wav`
+        ];
       }
     }
 
@@ -4830,9 +4838,11 @@ function ensureSfxForRace(raceId){
       try{ audio.load(); }catch(err){}
     };
     audio.oncanplaythrough = ()=>{
+      try{ console.info('[SFX] loaded', raceId, cue, audio.src); }catch(e){}
       store[cue] = audio;
     };
-    audio.onerror = ()=>{
+    audio.onerror = (ev)=>{
+      try{ console.warn('[SFX] failed load', raceId, cue, audio.src, ev); }catch(e){}
       if(sources.length) tryNext();
       else {
         audio._sfxExhausted = true;
