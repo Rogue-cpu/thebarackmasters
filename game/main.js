@@ -5501,8 +5501,17 @@ function stopLoopingSfx(loopState, key){
 function getAvatarFrame(raceId, state){
   if(!raceId) return null;
   const set = AVATARS[raceId];
-  if(!set) return null;
-  return set[state] || set.idle || null;
+  if(set){
+    return set[state] || set.idle || null;
+  }
+  // Fallback: try to use the ship sprite as a portrait when avatar frames are missing.
+  try{
+    const spriteImg = SHIP_SPRITES && SHIP_SPRITES[raceId];
+    if(spriteImg && spriteImg.src) return spriteImg;
+    const type = typeof getShipTypeById === 'function' ? getShipTypeById(raceId) : null;
+    if(type && type.spriteFile){ const img = new Image(); img.src = type.spriteFile; return img; }
+  }catch(e){}
+  return null;
 }
 
 function updateAvatarImg(){
