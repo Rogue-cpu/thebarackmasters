@@ -4692,6 +4692,15 @@ function ensureSfxForRace(raceId){
       store[cue] = variants;
       return;
     }
+    // Taftian: use provided big-spaceship missile sample for firing.
+    if(raceId === 'taftian' && cue === 'fire'){
+      const audio = new Audio();
+      audio.preload = 'auto';
+      audio.src = 'assets/sfx/taftian/fire.mp3';
+      try{ audio.load(); }catch(err){}
+      store[cue] = audio;
+      return;
+    }
     if(raceId === 'khanite' && (cue === 'split5' || cue === 'split10')){
       const variants = [
         'assets/sfx/khanite/Weap_fire_hydra_l1_01.ogg',
