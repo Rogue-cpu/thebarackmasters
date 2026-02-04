@@ -5081,7 +5081,11 @@ function playSfx(cue, raceId){
     });
     if(fallbackRace) clip = SFX_CACHE[fallbackRace][cue];
   }
-  if(!clip) return;
+  if(!clip){
+    try{ console.warn('[SFX] no clip for', cue, raceId); }catch(e){}
+    try{ if(playGenericSfx && typeof playGenericSfx === 'function'){ if(playGenericSfx(cue)) return; } }catch(e){}
+    return;
+  }
 
   // Variant support: store[cue] may be an array of Audio templates.
   if(Array.isArray(clip)){
@@ -5196,6 +5200,30 @@ function playLoudAudioSrc(src, label, gainMult=1.8, onEnded){
       try{ if(typeof onEnded === 'function') onEnded(); }catch(ee){}
     }
   }
+}
+
+// Try to play a generic cue file when no race-specific SFX is available.
+function playGenericSfx(cue){
+  if(!cue) return false;
+  const candidates = [
+    `assets/sfx/${cue}.ogg`,
+    `assets/sfx/${cue}.mp3`,
+    `assets/sfx/${cue}.wav`,
+    `assets/sfx/fire.ogg`,
+    `assets/sfx/fire.mp3`,
+    `assets/sfx/fire.wav`,
+    `assets/sfx/${cue}`
+  ];
+  for(const c of candidates){
+    try{
+      const a = new Audio(); a.preload = 'auto'; a.src = c;
+      try{ a.load(); }catch(e){}
+      try{ a.play().catch(()=>{}); }catch(e){}
+      try{ console.info('[SFX] played generic', c); }catch(e){}
+      return true;
+    }catch(e){}
+  }
+  return false;
 }
 
 // Play a louder SFX by routing through WebAudio with an amplified gain node.
@@ -5532,7 +5560,16 @@ function updateAvatarImg(){
       if(avatarWrap) avatarWrap.classList.remove('signal-lost');
     }
   }catch(e){}
-  const img = getAvatarFrame(currentAvatarRace, avatarState);
+  let img = getAvatarFrame(currentAvatarRace, avatarState);
+  if(!img){
+    try{
+      const type = (typeof getShipTypeById === 'function') ? getShipTypeById(currentAvatarRace) : null;
+      if(type){
+        if(type.factionIcon) { img = new Image(); img.src = type.factionIcon; }
+        else if(type.spriteFile) { img = new Image(); img.src = type.spriteFile; }
+      }
+    }catch(e){}
+  }
   el.src = (img && img.src) ? img.src : '';
 }
 
@@ -5552,7 +5589,16 @@ function updateEnemyAvatarImg(){
       resetEnemyAvatarFeed();
     }
   }catch(e){}
-  const img = getAvatarFrame(currentEnemyRace, enemyAvatarState);
+  let img = getAvatarFrame(currentEnemyRace, enemyAvatarState);
+  if(!img){
+    try{
+      const type = (typeof getShipTypeById === 'function') ? getShipTypeById(currentEnemyRace) : null;
+      if(type){
+        if(type.factionIcon) { img = new Image(); img.src = type.factionIcon; }
+        else if(type.spriteFile) { img = new Image(); img.src = type.spriteFile; }
+      }
+    }catch(e){}
+  }
   const desired = img && img.src ? img.src : '';
   const currentAttr = el.getAttribute('src') || '';
   if(currentAttr !== desired){
