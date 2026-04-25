@@ -721,3 +721,8 @@ body.menu-docked .menu-actions button{font-size:14px;padding:16px 18px}
 .lore-close{position:absolute;top:16px;right:18px;width:34px;height:34px;border-radius:50%;border:1px solid rgba(255,255,255,0.25);background:rgba(4,12,22,0.9);color:var(--accent);font-size:20px;font-family:'Orbitron',sans-serif;cursor:pointer;box-shadow:0 8px 20px rgba(0,0,0,0.6);transition:transform 0.2s, box-shadow 0.2s}
 .lore-close:hover{transform:scale(1.05);box-shadow:0 12px 26px rgba(0,0,0,0.65),0 0 12px rgba(122,226,255,0.3)}
 .lore-close:focus-visible{outline:2px solid var(--accent);outline-offset:3px}
+.settings-card{max-width:520px}
+.settings-form{display:flex;flex-direction:column;gap:18px;margin:22px 0 10px 0}
+.settings-row{display:grid;grid-template-columns:120px 1fr 56px;align-items:center;gap:14px;text-align:left;color:#dfe9ff;font-family:'Orbitron',sans-serif;letter-spacing:0.08em;text-transform:uppercase;font-size:12px}
+.settings-row input[type="range"]{width:100%;accent-color:var(--accent)}
+.settings-row strong{font-size:12px;color:var(--accent);text-align:right}

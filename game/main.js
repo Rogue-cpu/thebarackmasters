@@ -156,7 +156,16 @@ const resetBtn = document.getElementById('reset');
 const menuStartBtn = document.getElementById('menu-start');
 const menuResetBtn = document.getElementById('menu-reset');
 const menuMultiplayerBtn = document.getElementById('menu-multiplayer');
+const menuSettingsBtn = document.getElementById('menu-settings');
 const mainMenu = document.getElementById('main-menu');
+const settingsOverlay = document.getElementById('settings-overlay');
+const settingsCloseBtn = document.getElementById('settings-close');
+const settingsDoneBtn = document.getElementById('settings-done');
+const settingsResetBtn = document.getElementById('settings-reset');
+const musicVolumeInput = document.getElementById('music-volume');
+const sfxVolumeInput = document.getElementById('sfx-volume');
+const musicVolumeValueEl = document.getElementById('music-volume-value');
+const sfxVolumeValueEl = document.getElementById('sfx-volume-value');
 const profileOverlay = document.getElementById('profile-overlay');
 const profileCloseBtn = document.getElementById('profile-close');
 const profileUsernameInput = document.getElementById('profile-username');
@@ -197,6 +206,9 @@ const chatInputEl = document.getElementById('chat-input');
 const keys = {w:false,a:false,s:false,d:false,space:false,shift:false};
 let pendingSpecialPresses = 0;
 let pendingFirePresses = 0;
+const AUDIO_SETTINGS_KEY = 'bm_audio_settings';
+const DEFAULT_AUDIO_SETTINGS = { music: 0.65, sfx: 1 };
+let audioSettings = loadAudioSettings();
 
 const eventTestPanel = document.getElementById('event-test-panel');
 const eventTestToggleBtn = document.getElementById('event-test-toggle');
@@ -233,6 +245,108 @@ function isEasterEggEnabled(flag){
 
 function enableEasterEgg(flag){
   try{ localStorage.setItem(getEasterEggKey(flag), '1'); }catch(err){}
+}
+
+function clampVolume(value, fallback){
+  const base = Number.isFinite(value) ? value : fallback;
+  return Math.max(0, Math.min(1, base));
+}
+
+function loadAudioSettings(){
+  try{
+    const raw = localStorage.getItem(AUDIO_SETTINGS_KEY);
+    if(!raw) return {...DEFAULT_AUDIO_SETTINGS};
+    const parsed = JSON.parse(raw);
+    return {
+      music: clampVolume(parsed && parsed.music, DEFAULT_AUDIO_SETTINGS.music),
+      sfx: clampVolume(parsed && parsed.sfx, DEFAULT_AUDIO_SETTINGS.sfx)
+    };
+  }catch(err){
+    return {...DEFAULT_AUDIO_SETTINGS};
+  }
+}
+
+function saveAudioSettings(){
+  try{ localStorage.setItem(AUDIO_SETTINGS_KEY, JSON.stringify(audioSettings)); }catch(err){}
+}
+
+function getMusicVolume(base=1){
+  return clampVolume(base, 1) * clampVolume(audioSettings && audioSettings.music, DEFAULT_AUDIO_SETTINGS.music);
+}
+
+function getSfxVolume(base=1){
+  return clampVolume(base, 1) * clampVolume(audioSettings && audioSettings.sfx, DEFAULT_AUDIO_SETTINGS.sfx);
+}
+
+function refreshSettingsUi(){
+  if(musicVolumeInput) musicVolumeInput.value = `${Math.round(getMusicVolume(1) * 100)}`;
+  if(sfxVolumeInput) sfxVolumeInput.value = `${Math.round(getSfxVolume(1) * 100)}`;
+  if(musicVolumeValueEl) musicVolumeValueEl.textContent = `${Math.round(getMusicVolume(1) * 100)}%`;
+  if(sfxVolumeValueEl) sfxVolumeValueEl.textContent = `${Math.round(getSfxVolume(1) * 100)}%`;
+}
+
+function applyAudioSettings(){
+  try{
+    if(typeof window.setMainMenuMusicVolume === 'function'){
+      window.setMainMenuMusicVolume(getMusicVolume(0.7));
+    }
+  }catch(err){}
+  if(BGM && BGM.track){
+    try{ BGM.track.volume = getMusicVolume(0.65); }catch(err){}
+  }
+  if(activeVictoryClip){
+    try{ activeVictoryClip.volume = getMusicVolume(0.9); }catch(err){}
+  }
+  if(blackgridCinematicAudio && blackgridCinematicAudio.loopClip){
+    try{ blackgridCinematicAudio.loopClip.volume = getMusicVolume(blackgridCinematicAudio.volume || 0.95); }catch(err){}
+  }
+  if(uiClickAudio){
+    try{ uiClickAudio.volume = getSfxVolume(1); }catch(err){}
+  }
+  if(uiNavAudio){
+    try{ uiNavAudio.volume = getSfxVolume(1); }catch(err){}
+  }
+  if(boringChargeAudio){
+    try{ boringChargeAudio.volume = getSfxVolume(1); }catch(err){}
+  }
+  try{
+    (ships || []).forEach(ship=>{
+      if(!ship || !ship.loopingSfx) return;
+      Object.values(ship.loopingSfx).forEach(clip=>{
+        if(!clip || clip._stopped) return;
+        if(clip._kind === 'webaudio' && clip.gain){
+          try{ clip.gain.gain.value = getSfxVolume(0.85); }catch(err){}
+        } else if(typeof clip.volume === 'number'){
+          try{ clip.volume = getSfxVolume(0.85); }catch(err){}
+        }
+      });
+    });
+  }catch(err){}
+  refreshSettingsUi();
+  saveAudioSettings();
+}
+
+function setMusicVolumeFromUi(value){
+  audioSettings.music = clampVolume((Number(value) || 0) / 100, DEFAULT_AUDIO_SETTINGS.music);
+  applyAudioSettings();
+}
+
+function setSfxVolumeFromUi(value){
+  audioSettings.sfx = clampVolume((Number(value) || 0) / 100, DEFAULT_AUDIO_SETTINGS.sfx);
+  applyAudioSettings();
+}
+
+function showSettingsOverlay(){
+  if(!settingsOverlay) return;
+  refreshSettingsUi();
+  settingsOverlay.classList.remove('hidden');
+  settingsOverlay.setAttribute('aria-hidden', 'false');
+}
+
+function hideSettingsOverlay(){
+  if(!settingsOverlay) return;
+  settingsOverlay.classList.add('hidden');
+  settingsOverlay.setAttribute('aria-hidden', 'true');
 }
 
 function migrateLegacyEasterEggUnlock(){
@@ -460,6 +574,12 @@ function ensureTypeSpritesLoaded(type){
     img.onerror = ()=>{};
     img.src = type.spriteFileFire;
   }
+  if(type.fighterSpriteFile && type.fighterSpriteId && !SHIP_SPRITES[type.fighterSpriteId]){
+    const img = new Image();
+    img.onload = ()=>{ SHIP_SPRITES[type.fighterSpriteId] = img; };
+    img.onerror = ()=>{};
+    img.src = type.fighterSpriteFile;
+  }
 
   if(type.id === 'cabal' && !SHIP_SPRITES[CABAL_DEPLOYED_SPRITE_KEY]){
     const img = new Image();
@@ -473,10 +593,21 @@ function startCriminalAmbush(caster, conf){
   if(!caster) return 0;
   ensureTypeSpritesLoaded(CRIMINAL_AMBUSHER_TYPE);
   const count = Math.max(1, Math.min(12, (conf && conf.count) || 4));
+  const maxActive = Math.max(1, Math.min(16, (conf && conf.maxActive) || 6));
+  const activeAmbushers = (ships || []).filter(ship=>
+    ship &&
+    ship.hp > 0 &&
+    ship.team === caster.team &&
+    ship.type &&
+    ship.type.id === CRIMINAL_AMBUSHER_TYPE.id
+  ).length;
+  const spawnBudget = Math.max(0, maxActive - activeAmbushers);
+  const finalCount = Math.min(count, spawnBudget);
+  if(finalCount <= 0) return 0;
   const radius = Math.max(40, (conf && conf.spawnRadius) || 110);
   const warpDuration = Math.max(0.2, (conf && conf.warpDuration) || 0.65);
   let spawned = 0;
-  for(let i=0;i<count;i++){
+  for(let i=0;i<finalCount;i++){
     const a = Math.random() * Math.PI * 2;
     const jitter = 20 + Math.random()*28;
     const toX = caster.x + Math.cos(a) * radius + (Math.random()-0.5) * jitter;
@@ -626,12 +757,17 @@ function createPlaceholderShip(options){
     fireRate: cfg.fireRate || 520,
     color: cfg.color || '#888',
     spriteFile: cfg.spriteFile || null,
+    spriteFileFire: cfg.spriteFileFire || null,
+    fireSpriteId: cfg.fireSpriteId || null,
+    fighterSpriteFile: cfg.fighterSpriteFile || null,
+    fighterSpriteId: cfg.fighterSpriteId || null,
     spriteAngleOffset: cfg.spriteAngleOffset ?? -Math.PI/2,
     spriteScale: cfg.spriteScale || 0.08,
     trailColors: cfg.trailColors || DEFAULT_TRAIL_COLORS,
     energyCapacity: cfg.energyCapacity,
     energyCost: cfg.energyCost,
     energyRegen: cfg.energyRegen,
+    interceptor: cfg.interceptor || null,
     special: cfg.special || null,
     projectile: cfg.projectile || {
       style:'default',
@@ -927,6 +1063,107 @@ const SHIP_TYPES = [
       damage:11
     }
   },
+  createPlaceholderShip({id:'protoss', name:'Protoss', classLabel:'Carrier', color:'#f0cf78', spriteFile:'../Protoss.png', fighterSpriteId:'protoss_interceptor', fighterSpriteFile:'../Interceptor.png',
+    size:34,
+    speed:102,
+    hp:240,
+    fireRate:420,
+    spriteScale:0.18,
+    trailColors:{core:[255,242,180],mid:[120,180,255]},
+    notes:'Carrier that launches up to eight interceptors which orbit and strafe enemy ships.',
+    interceptor:{
+      maxActive:8,
+      hp:18,
+      speed:365,
+      accel:1080,
+      size:10,
+      fireInterval:0.24,
+      projectileDamage:5,
+      projectileSpeed:640,
+      projectileTtl:1.05,
+      engageRange:150,
+      orbitRadius:92,
+      orbitJitter:18,
+      spriteScale:0.08,
+      core:[255,240,180],
+      mid:[120,210,255],
+      tail:[90,140,255]
+    },
+    projectile:{
+      style:'interceptorLaunch',
+      damage:0,
+      speed:380,
+      ttl:2.2,
+      muzzleOffset:24
+    }
+  }),
+  createPlaceholderShip({id:'nod', name:'NOD', classLabel:'Basilisk', color:'#d1745c', spriteFile:'../NOD.png',
+    size:38,
+    speed:88,
+    hp:290,
+    fireRate:3400,
+    spriteScale:0.2,
+    trailColors:{core:[255,70,70],mid:[90,10,10]},
+    notes:'Large siege warship that charges twin heavy lasers before firing.',
+    projectile:{
+      style:'basiliskDualLaser',
+      damage:80,
+      length:1200,
+      ttl:0.12,
+      muzzleOffset:6,
+      beamSeparation:54,
+      cannonForwardOffset:6,
+      width:12,
+      chargeTime:3.0,
+      chargeGlow:[200,30,30],
+      core:[255,70,70],
+      mid:[120,0,0],
+      tail:[12,0,0]
+    }
+  }),
+  createPlaceholderShip({id:'terran', name:'Terran', classLabel:'Battlecruiser', color:'#d5a26a', spriteFile:'../Terran.png',
+    size:34,
+    speed:112,
+    hp:275,
+    fireRate:210,
+    spriteAngleOffset:Math.PI,
+    spriteScale:0.14,
+    trailColors:{core:[255,190,110],mid:[180,70,20]},
+    notes:'Heavy gunship with a frontal barrage and a devastating Yamato Cannon.',
+    special:{
+      type:'yamatoCannon',
+      cost:42,
+      duration:3.1,
+      chargeTime:2.55,
+      cooldown:12,
+      muzzleOffset:44,
+      projectileSpeed:620,
+      projectileTtl:2.35,
+      projectileDamage:155,
+      aoeRadius:125,
+      aoeDamage:72,
+      fighterDamage:95,
+      projectileRadius:18,
+      core:[255,245,190],
+      mid:[255,165,70],
+      outer:[170,70,10]
+    },
+    projectile:{
+      style:'lifePellet',
+      core:[255,240,180],
+      mid:[255,165,70],
+      tail:[170,70,10],
+      width:2.2,
+      radius:1.8,
+      speed:920,
+      muzzleOffset:28,
+      ttl:0.85,
+      damage:7,
+      scatterCount:8,
+      scatterSpread:0.68,
+      drawLength:20
+    }
+  }),
   createPlaceholderShip({id:'criminal', name:'Criminal', classLabel:'Syndicate Prototype', color:'#b36b5c', trailColors:{core:[255,242,190],mid:[255,200,90]}, spriteFile:'assets/ships/criminals.png',
     size:28,
     spriteScale:0.11,
@@ -3152,6 +3389,7 @@ function ensureUiClickSound(){
   const audio = new Audio();
   audio.preload = 'auto';
   audio.src = UI_CLICK_SOUND;
+  audio.volume = getSfxVolume(1);
   uiClickAudio = audio;
   return audio;
 }
@@ -3163,6 +3401,7 @@ function ensureBoringChargeSound(){
   const audio = new Audio();
   audio.preload = 'auto';
   audio.src = BORING_CHARGE_SOUND;
+  audio.volume = getSfxVolume(1);
   boringChargeAudio = audio;
   return audio;
 }
@@ -3180,7 +3419,7 @@ function safePlayAudio(template, label){
     if(!src) return;
     const clip = new Audio(src);
     clip.preload = 'auto';
-    if(Number.isFinite(template.volume)) clip.volume = template.volume;
+    clip.volume = getSfxVolume(Number.isFinite(template.volume) ? template.volume : 1);
     if(activeSecretEvent && activeSecretEvent.type === 'horror'){
       const wobble = 0.72 + Math.random() * 0.42;
       try{ clip.playbackRate = wobble; }catch(err){}
@@ -3553,7 +3792,7 @@ function startHorrorAudio(){
   if(bgm){
     try{
       // No extra loop layer — just make the soundtrack feel alien.
-      bgm.volume = 0.28;
+      bgm.volume = getMusicVolume(0.28);
       bgm.playbackRate = 0.125;
       if(typeof bgm.preservesPitch !== 'undefined') bgm.preservesPitch = false;
       if(typeof bgm.mozPreservesPitch !== 'undefined') bgm.mozPreservesPitch = false;
@@ -4387,6 +4626,7 @@ let fartCloudAudioTried = false;
 const FURNACE_SOUND = '../steve.wav';
 let furnaceAudioTemplate = null;
 let furnaceAudioTried = false;
+const TERRAN_YAMATO_FIRE_SOUND = '../terran yamato cannon firing.mp3';
 const DEFAULT_VICTORY_THEME = 'assets/sfx/victory.mp3';
 const VICTORY_THEME_MAP = {
   default: DEFAULT_VICTORY_THEME,
@@ -4427,6 +4667,7 @@ const blackgridCinematicAudio = {
   active: false,
   volume: 0.95
 };
+applyAudioSettings();
 
 function ensureBlackgridTargetingAmbience(){
   if(blackgridCinematicAudio.template) return blackgridCinematicAudio.template;
@@ -4449,7 +4690,7 @@ function startBlackgridCinematicAudio(){
         const clip = new Audio(src);
         clip.preload = 'auto';
         clip.loop = true;
-        clip.volume = Math.max(0, Math.min(1, blackgridCinematicAudio.volume || 0.95));
+        clip.volume = getMusicVolume(blackgridCinematicAudio.volume || 0.95);
         clip._stopped = false;
         blackgridCinematicAudio.loopClip = clip;
         const p = clip.play();
@@ -4701,6 +4942,55 @@ function ensureSfxForRace(raceId){
       store[cue] = audio;
       return;
     }
+    if(raceId === 'protoss' && cue === 'fire'){
+      const audio = new Audio();
+      audio.preload = 'auto';
+      audio.src = '../Carrier Attack.mp3';
+      try{ audio.load(); }catch(err){}
+      store[cue] = audio;
+      return;
+    }
+    if(raceId === 'protoss_interceptor' && cue === 'fire'){
+      const audio = new Audio();
+      audio.preload = 'auto';
+      audio.src = '../Interceptor Attack.mp3';
+      try{ audio.load(); }catch(err){}
+      store[cue] = audio;
+      return;
+    }
+    if(raceId === 'nod' && cue === 'fire'){
+      const audio = new Audio();
+      audio.preload = 'auto';
+      audio.src = '../NOD attack.mp3';
+      try{ audio.load(); }catch(err){}
+      store[cue] = audio;
+      return;
+    }
+    if(raceId === 'terran' && cue === 'special'){
+      const audio = new Audio();
+      audio.preload = 'auto';
+      audio.src = '../starcraft-2-battle.mp3';
+      try{ audio.load(); }catch(err){}
+      store[cue] = audio;
+      return;
+    }
+    if(raceId === 'terran' && cue === 'fire'){
+      const variants = [
+        '../Terran Attack 1.mp3',
+        '../Terran Attack 2.mp3',
+        '../Terran Attack 4.mp3',
+        '../Terran Attack 5.mp3',
+        '../Terran Attack 6.mp3'
+      ].map(src=>{
+        const a = new Audio();
+        a.preload = 'auto';
+        a.src = src;
+        try{ a.load(); }catch(err){}
+        return a;
+      });
+      store[cue] = variants;
+      return;
+    }
     if(raceId === 'khanite' && (cue === 'split5' || cue === 'split10')){
       const variants = [
         'assets/sfx/khanite/Weap_fire_hydra_l1_01.ogg',
@@ -4877,7 +5167,7 @@ function ensureBattleMusic(){
   const audio = new Audio();
   audio.preload = 'auto';
   audio.loop = true;
-  audio.volume = 0.65;
+  audio.volume = getMusicVolume(0.65);
   audio.src = BGM.src;
   BGM.track = audio;
   return audio;
@@ -4914,7 +5204,7 @@ function playShipDeath(){
   if(!template) return;
   try{
     const clip = template.cloneNode(true);
-    clip.volume = 0.85;
+    clip.volume = getSfxVolume(0.85);
     clip.play();
   }catch(err){}
 }
@@ -4934,7 +5224,7 @@ function playFartCloudSound(){
   if(!template) return;
   try{
     const clip = template.cloneNode(true);
-    clip.volume = 0.85;
+    clip.volume = getSfxVolume(0.85);
     clip.play();
   }catch(err){}
 }
@@ -4954,7 +5244,7 @@ function playFurnaceSound(){
   if(!template) return;
   try{
     const clip = template.cloneNode(true);
-    clip.volume = 0.95;
+    clip.volume = getSfxVolume(0.95);
     clip.play();
   }catch(err){}
 }
@@ -5008,7 +5298,7 @@ function playVictorySound(raceId){
       clip.addEventListener('canplaythrough', startPlayback, {once:true});
       try{ clip.load(); }catch(err){}
     }
-    clip.volume = 0.9;
+    clip.volume = getMusicVolume(0.9);
     activeVictoryClip = clip;
     activeVictoryRace = raceId || 'default';
     clip.addEventListener('ended', ()=>{
@@ -5159,7 +5449,7 @@ function playLoudAudioSrc(src, label, gainMult=1.8, onEnded){
         const srcNode = ctx.createBufferSource();
         srcNode.buffer = buffer;
         const gain = ctx.createGain();
-        gain.gain.value = Math.max(0, gainMult);
+        gain.gain.value = Math.max(0, gainMult * getSfxVolume(1));
 
         // Match the "horror" wobble behavior used by safePlayAudio.
         if(activeSecretEvent && activeSecretEvent.type === 'horror'){
@@ -5236,6 +5526,7 @@ function playGenericSfx(cue){
   for(const c of candidates){
     try{
       const a = new Audio(); a.preload = 'auto'; a.src = c;
+      try{ a.volume = getSfxVolume(1); }catch(err){}
       try{ a.load(); }catch(e){}
       try{ a.play().catch(()=>{}); }catch(e){}
       try{ console.info('[SFX] played generic', c); }catch(e){}
@@ -5274,7 +5565,7 @@ function playLoudSfx(cue, raceId, gainMult=1.8){
         const srcNode = ctx.createBufferSource();
         srcNode.buffer = buffer;
         const gain = ctx.createGain();
-        gain.gain.value = Math.max(0, gainMult);
+        gain.gain.value = Math.max(0, gainMult * getSfxVolume(1));
         srcNode.connect(gain);
         gain.connect(ctx.destination);
         srcNode.start(0);
@@ -5430,7 +5721,7 @@ function startLoopingSfx(loopState, key, cue, raceId, volume=0.85){
   // Prefer WebAudio for gapless loops (HTMLAudio loop can have a small pause).
   const ctx = ensureSfxAudioContext();
   const tuning = CHMMR_LOOP_TUNING[key] || null;
-  const desiredVolume = Math.max(0, Math.min(1, (tuning && typeof tuning.volume === 'number') ? tuning.volume : volume));
+  const desiredVolume = getSfxVolume((tuning && typeof tuning.volume === 'number') ? tuning.volume : volume);
   const desiredRate = (tuning && typeof tuning.playbackRate === 'number') ? Math.max(0.25, Math.min(8, tuning.playbackRate)) : 1;
   if(ctx){
     if(ctx.state === 'suspended'){
@@ -6036,6 +6327,11 @@ class Ship{
       }
     }
     if(this.thrusting) this.emitEngineExhaust();
+    this.updateTerranBarrage(dt);
+    this.updateBasiliskCharge(dt);
+    if(this.activeSpecial && this.activeSpecial.type === 'yamatoCannon'){
+      this.activeSpecial.aimAngle = this.angle;
+    }
     const turnDelta = normalizeAngle(this.angle - this.prevAngle);
     if(turnDelta > 0.05) this.lastTurnDir = 'right';
     else if(turnDelta < -0.05) this.lastTurnDir = 'left';
@@ -6063,6 +6359,45 @@ class Ship{
     this.updateDamageOverTime(dt);
     const regen = (this.energyRegen || 0) * (this.mod ? (this.mod.energyRegenMult || 1) : 1);
     this.energy = Math.min(this.maxEnergy, this.energy + regen * dt);
+  }
+  updateBasiliskCharge(dt){
+    const charge = this.basiliskCharge;
+    if(!charge) return;
+    if(this.hp <= 0){
+      this.basiliskCharge = null;
+      return;
+    }
+    charge.angle = this.angle;
+    charge.elapsed = (charge.elapsed || 0) + dt;
+    charge.sparkTimer = (charge.sparkTimer || 0) - dt;
+    if(charge.sparkTimer <= 0){
+      charge.sparkTimer = 0.04 + Math.random() * 0.05;
+      const glow = charge.glow || [255,170,120];
+      const sep = charge.beamSeparation || 28;
+      const px = -Math.sin(this.angle);
+      const py = Math.cos(this.angle);
+      const muzzleX = this.x + Math.cos(this.angle) * (charge.muzzleOffset || this.size);
+      const muzzleY = this.y + Math.sin(this.angle) * (charge.muzzleOffset || this.size);
+      const half = sep * 0.5;
+      for(let side=-1; side<=1; side+=2){
+        const cx = muzzleX + px * half * side;
+        const cy = muzzleY + py * half * side;
+        particles.push({
+          x: cx + (Math.random() - 0.5) * 6,
+          y: cy + (Math.random() - 0.5) * 6,
+          vx: Math.cos(this.angle) * (25 + Math.random()*40) + (Math.random() - 0.5) * 45,
+          vy: Math.sin(this.angle) * (25 + Math.random()*40) + (Math.random() - 0.5) * 45,
+          life: 0.16 + Math.random() * 0.16,
+          size: 0.9 + Math.random() * 0.9,
+          core: [255,70,70],
+          mid: glow
+        });
+      }
+    }
+    if(charge.elapsed >= (charge.chargeTime || 2)){
+      this.fireBasiliskBeams(charge);
+      this.basiliskCharge = null;
+    }
   }
 
   recomputeModifiers(dt){
@@ -6283,10 +6618,11 @@ class Ship{
         if(this.shoot(this.angle)) {
           const skipCooldown = !!(this.projectileConfig && this.projectileConfig.style === 'laserBeam' && this.type && this.type.id === 'cabal' && this.doctrine === 'deployed');
           if(!skipCooldown) this.cool = this.getFireCooldown();
+          const skipFireSfx = !!(this.type && this.type.id === 'terran' && this.projectileConfig && this.projectileConfig.style === 'lifePellet');
           const fireRaceId = (this.type && this.type.id === 'cabal' && this.doctrine === 'deployed')
             ? 'cabal_deployed'
             : (this.type && this.type.id === 'obsidian_circuit' ? 'obsidian_circuit' : this.type.id);
-          playSfx('fire', fireRaceId);
+          if(!skipFireSfx) playSfx('fire', fireRaceId);
         }
         this.fireLatch = true;
       }
@@ -6295,10 +6631,11 @@ class Ship{
       if(this.shoot(this.angle)) {
         const skipCooldown = !!(this.projectileConfig && this.projectileConfig.style === 'laserBeam' && this.type && this.type.id === 'cabal' && this.doctrine === 'deployed');
         if(!skipCooldown) this.cool = this.getFireCooldown();
+        const skipFireSfx = !!(this.type && this.type.id === 'terran' && this.projectileConfig && this.projectileConfig.style === 'lifePellet');
         const fireRaceId = (this.type && this.type.id === 'cabal' && this.doctrine === 'deployed')
           ? 'cabal_deployed'
           : (this.type && this.type.id === 'obsidian_circuit' ? 'obsidian_circuit' : this.type.id);
-        playSfx('fire', fireRaceId);
+        if(!skipFireSfx) playSfx('fire', fireRaceId);
       }
     }
     if(!isLocalInput){
@@ -7243,6 +7580,9 @@ class Ship{
         break;
       case 'humperDash':
         this.updateHumperDash(spec, dt);
+        break;
+      case 'yamatoCannon':
+        this.updateYamatoCannon(spec, dt);
         break;
       case 'boardingPods':
         this.updateBoardingPods(spec, dt);
@@ -8825,6 +9165,10 @@ class Ship{
       } else if(this.specialConfig.type === 'humperDash'){
         const lowHealth = this.hp < this.type.hp * 0.45;
         shouldUse = dist <= preferRange * 0.9 || lowHealth;
+      } else if(this.specialConfig.type === 'yamatoCannon'){
+        const specRange = (this.specialConfig.projectileSpeed || 430) * (this.specialConfig.projectileTtl || 2.35) * 0.88;
+        shouldUse = canSeeTarget && dist <= specRange;
+        if(shouldUse && Math.random() < 0.7) shouldUse = false;
       } else if(this.specialConfig.type === 'confusionRay'){
         const specRange = (this.specialConfig.range || preferRange) * 0.95;
         shouldUse = canSeeTarget && dist <= specRange;
@@ -9052,6 +9396,30 @@ class Ship{
   shoot(angle){
     const projectile = this.projectileConfig || {};
 
+    if(projectile && projectile.style === 'basiliskDualLaser'){
+      if(this.basiliskCharge) return false;
+      const energyCost = this.energyCost || 8;
+      if(this.energy < energyCost) return false;
+      this.energy = Math.max(0, this.energy - energyCost);
+      this.basiliskCharge = {
+        angle,
+        elapsed: 0,
+        chargeTime: Math.max(0.1, projectile.chargeTime || 2),
+        muzzleOffset: projectile.muzzleOffset || this.size,
+        beamSeparation: Math.max(8, projectile.beamSeparation || 28),
+        projectile,
+        glow: projectile.chargeGlow || [255,170,120],
+        sparkTimer: 0
+      };
+      this.lastShotAt = performance.now ? performance.now() : Date.now();
+      if(this.activeSpecial && this.activeSpecial.type === 'lunarCloak'){
+        this.activeSpecial.forceEnd = true;
+        this.endCloak();
+        this.activeSpecial = null;
+      }
+      return true;
+    }
+
     // Anti Shamen crystal shard: only one active channel per ship at a time.
     if(projectile && projectile.channelHold && projectile.style === 'crystalShard'){
       const existing = bullets.find(b=> b && b.ttl > 0 && b.ownerShip === this && b.projectile && b.projectile.style === 'crystalShard' && !b.released);
@@ -9129,6 +9497,24 @@ class Ship{
 
     if(this.energy < energyCost) return false;
     this.energy = Math.max(0, this.energy - energyCost);
+
+    if(this.type && this.type.id === 'terran' && projectile && projectile.style === 'lifePellet'){
+      const count = Math.max(1, projectile.scatterCount || 8);
+      this.terranBarrage = {
+        projectile,
+        shotsRemaining: count,
+        minDelay: 0.02,
+        maxDelay: 0.075,
+        timer: 0
+      };
+      this.lastShotAt = performance.now ? performance.now() : Date.now();
+      if(this.activeSpecial && this.activeSpecial.type === 'lunarCloak'){
+        this.activeSpecial.forceEnd = true;
+        this.endCloak();
+        this.activeSpecial = null;
+      }
+      return true;
+    }
 
     // Hitscan beam weapons.
     if(projectile && (projectile.style === 'laserBeam' || projectile.style === 'laserShot' || projectile.style === 'lightningBolt' || projectile.style === 'shamenLaser')){
@@ -9246,6 +9632,15 @@ class Ship{
       const fireRaceId = (this.type && this.type.id === 'cabal' && this.doctrine === 'deployed') ? 'cabal_deployed' : this.type.id;
       playSfx('fire', fireRaceId);
       return true;
+    }
+
+    if(this.type && this.type.id === 'protoss'){
+      if(this.activeSpecial && this.activeSpecial.type === 'lunarCloak'){
+        this.activeSpecial.forceEnd = true;
+        this.endCloak();
+        this.activeSpecial = null;
+      }
+      return this.launchProtossInterceptor();
     }
 
     const speed = projectile.speed || 420;
@@ -9394,6 +9789,76 @@ class Ship{
     playSfx('fire', fireRaceId);
     return true;
   }
+  fireBasiliskBeams(charge){
+    const projectile = (charge && charge.projectile) || this.projectileConfig || {};
+    const angle = (charge && typeof charge.angle === 'number') ? charge.angle : this.angle;
+    const length = Math.max(200, projectile.length || 1200);
+    const muzzleOffset = charge && charge.muzzleOffset != null ? charge.muzzleOffset : (projectile.muzzleOffset || this.size);
+    const beamSeparation = charge && charge.beamSeparation != null ? charge.beamSeparation : Math.max(8, projectile.beamSeparation || 28);
+    const cannonForwardOffset = projectile.cannonForwardOffset != null ? projectile.cannonForwardOffset : muzzleOffset;
+    const px = -Math.sin(angle);
+    const py = Math.cos(angle);
+    const dirX = Math.cos(angle);
+    const dirY = Math.sin(angle);
+    const forwardX = this.x + dirX * cannonForwardOffset;
+    const forwardY = this.y + dirY * cannonForwardOffset;
+    const half = beamSeparation * 0.5;
+    const origins = [
+      {x: forwardX + px * half, y: forwardY + py * half},
+      {x: forwardX - px * half, y: forwardY - py * half}
+    ];
+    const baseDamage = projectile.damage != null ? projectile.damage : 80;
+    const damageMult = this.mod ? (this.mod.damageMult || 1) : 1;
+    const damagePerBeam = Math.max(0, baseDamage * damageMult);
+    origins.forEach(origin=>{
+      let endX = origin.x + dirX * length;
+      let endY = origin.y + dirY * length;
+      let hitShip = null;
+      let bestT = Infinity;
+      ships.forEach(s=>{
+        if(!s || s.team === this.team || s.hp <= 0 || s.isWarping()) return;
+        const vx = s.x - origin.x;
+        const vy = s.y - origin.y;
+        const t = (vx * dirX + vy * dirY);
+        if(t < 0 || t > length) return;
+        const cx = origin.x + dirX * t;
+        const cy = origin.y + dirY * t;
+        const dist = Math.hypot(s.x - cx, s.y - cy);
+        const r = Math.max((projectile.width || 12) * 0.75, (s.size || 18) * 0.9);
+        if(dist <= r && t < bestT){
+          bestT = t;
+          hitShip = s;
+        }
+      });
+      if(hitShip){
+        endX = origin.x + dirX * bestT;
+        endY = origin.y + dirY * bestT;
+        applyDamage(hitShip, damagePerBeam, this);
+      }
+      bullets.push({
+        x: origin.x,
+        y: origin.y,
+        dx: 0,
+        dy: 0,
+        team: this.team,
+        ttl: projectile.ttl || 0.12,
+        damage: damagePerBeam,
+        ownerShip: this,
+        raceId: this.type.id,
+        projectile:{
+          style:'laserShot',
+          width: projectile.width || 12,
+          core: projectile.core || [255,255,240],
+          mid: projectile.mid || [255,150,90],
+          tail: projectile.tail || [255,70,40]
+        },
+        endX,
+        endY,
+        seed: Math.random() * Math.PI * 2
+      });
+    });
+    this.lastShotAt = performance.now ? performance.now() : Date.now();
+  }
   getFireCooldown(multiplier=1){
     const baseRate = this.fireRate || 500;
     let rate = baseRate * multiplier;
@@ -9407,6 +9872,18 @@ class Ship{
       rate *= scale;
     }
     return rate;
+  }
+  launchProtossInterceptor(){
+    if(!this.type || this.type.id !== 'protoss') return false;
+    if(typeof ensureTypeSpritesLoaded === 'function'){
+      ensureTypeSpritesLoaded(this.type);
+    }
+    const launched = launchProtossInterceptor(this);
+    if(launched){
+      this.lastShotAt = performance.now ? performance.now() : Date.now();
+      playSfx('fire', 'protoss');
+    }
+    return launched;
   }
   draw(ctx){
     const warping = this.isWarping();
@@ -9508,7 +9985,50 @@ class Ship{
     }
 
     this.drawCrewLossIndicator(ctx);
+    this.drawBasiliskCharge(ctx);
     this.drawSpecial(ctx);
+  }
+  drawBasiliskCharge(ctx){
+    const charge = this.basiliskCharge;
+    if(!charge) return;
+    const t = Math.max(0, Math.min(1, (charge.elapsed || 0) / Math.max(0.01, charge.chargeTime || 2)));
+    const angle = this.angle;
+    const dirX = Math.cos(angle);
+    const dirY = Math.sin(angle);
+    const px = -Math.sin(angle);
+    const py = Math.cos(angle);
+    const muzzleOffset = charge.muzzleOffset || this.size;
+    const beamSeparation = charge.beamSeparation || 28;
+    const cannonForwardOffset = charge.projectile && charge.projectile.cannonForwardOffset != null
+      ? charge.projectile.cannonForwardOffset
+      : muzzleOffset;
+    const forwardX = this.x + dirX * cannonForwardOffset;
+    const forwardY = this.y + dirY * cannonForwardOffset;
+    const half = beamSeparation * 0.5;
+    const glow = charge.glow || [255,170,120];
+    ctx.save();
+    ctx.globalCompositeOperation = 'lighter';
+    for(let side=-1; side<=1; side+=2){
+      const cx = forwardX + px * half * side;
+      const cy = forwardY + py * half * side;
+      const radius = (10 + t * 18) * (0.92 + Math.sin((charge.elapsed || 0) * 14 + side) * 0.08);
+      const grad = ctx.createRadialGradient(cx, cy, radius * 0.12, cx, cy, radius * 1.8);
+      grad.addColorStop(0, `rgba(255,90,90,${0.72 + t * 0.18})`);
+      grad.addColorStop(0.32, rgba(glow, 0.82));
+      grad.addColorStop(0.68, 'rgba(35,0,0,0.55)');
+      grad.addColorStop(1, 'rgba(0,0,0,0)');
+      ctx.fillStyle = grad;
+      ctx.beginPath();
+      ctx.arc(cx, cy, radius * 1.35, 0, Math.PI * 2);
+      ctx.fill();
+
+      ctx.strokeStyle = `rgba(20,0,0,${0.7 + t * 0.15})`;
+      ctx.lineWidth = 1.4 + t * 1.8;
+      ctx.beginPath();
+      ctx.arc(cx, cy, radius * (0.55 + t * 0.25), 0, Math.PI * 2);
+      ctx.stroke();
+    }
+    ctx.restore();
   }
   drawCrewLossIndicator(ctx){
     if(!this.crewLossIndicator) return;
@@ -9539,6 +10059,134 @@ class Ship{
     ctx.beginPath();
     ctx.arc(this.x, this.y, outerRadius * 0.8, 0, Math.PI*2);
     ctx.stroke();
+    ctx.restore();
+  }
+  updateYamatoCannon(spec, dt){
+    const conf = spec.config || this.specialConfig || {};
+    spec.aimAngle = (typeof spec.aimAngle === 'number') ? spec.aimAngle : this.angle;
+    spec.sparkTimer = (spec.sparkTimer || 0) - dt;
+    const muzzleOffset = conf.muzzleOffset || this.size;
+    if(spec.sparkTimer <= 0){
+      spec.sparkTimer = 0.035 + Math.random()*0.03;
+      const a = spec.aimAngle;
+      const x = this.x + Math.cos(a) * muzzleOffset;
+      const y = this.y + Math.sin(a) * muzzleOffset;
+      particles.push({
+        x: x + (Math.random()-0.5)*8,
+        y: y + (Math.random()-0.5)*8,
+        vx: Math.cos(a) * (30 + Math.random()*70) + (Math.random()-0.5)*55,
+        vy: Math.sin(a) * (30 + Math.random()*70) + (Math.random()-0.5)*55,
+        life: 0.14 + Math.random()*0.12,
+        size: 1.0 + Math.random()*1.3,
+        core: conf.core || [235,250,255],
+        mid: conf.mid || [110,190,255]
+      });
+    }
+    if(!spec.fired && spec.age >= (conf.chargeTime || 2.55)){
+      this.fireYamatoCannon(spec);
+      spec.fired = true;
+      spec.forceEnd = true;
+    }
+  }
+  updateTerranBarrage(dt){
+    const barrage = this.terranBarrage;
+    if(!barrage) return;
+    if(this.hp <= 0){
+      this.terranBarrage = null;
+      return;
+    }
+    barrage.timer -= dt;
+    if(barrage.timer > 0) return;
+    if(barrage.shotsRemaining <= 0){
+      this.terranBarrage = null;
+      return;
+    }
+    this.fireTerranBarrageShot(barrage);
+    barrage.shotsRemaining -= 1;
+    if(barrage.shotsRemaining <= 0){
+      this.terranBarrage = null;
+      return;
+    }
+    barrage.timer = barrage.minDelay + Math.random() * Math.max(0.001, barrage.maxDelay - barrage.minDelay);
+  }
+  fireTerranBarrageShot(barrage){
+    const projectile = barrage.projectile || this.projectileConfig || {};
+    const baseAngle = this.angle;
+    const spread = projectile.scatterSpread || 0.68;
+    const offset = (Math.random() - 0.5) * spread;
+    const angle = baseAngle + offset;
+    const speed = projectile.speed || 920;
+    const muzzleOffset = projectile.muzzleOffset || this.size;
+    const originX = this.x + Math.cos(angle) * muzzleOffset;
+    const originY = this.y + Math.sin(angle) * muzzleOffset;
+    const damageMult = this.mod ? (this.mod.damageMult || 1) : 1;
+    const damage = Math.max(0, (projectile.damage != null ? projectile.damage : 7) * damageMult);
+    bullets.push({
+      x: originX,
+      y: originY,
+      dx: Math.cos(angle) * speed,
+      dy: Math.sin(angle) * speed,
+      team: this.team,
+      ttl: projectile.ttl || 0.85,
+      damage,
+      ownerShip: this,
+      raceId: this.type.id,
+      projectile,
+      seed: Math.random() * Math.PI * 2
+    });
+    this.lastShotAt = performance.now ? performance.now() : Date.now();
+    playSfx('fire', 'terran');
+  }
+  fireYamatoCannon(spec){
+    const conf = spec.config || this.specialConfig || {};
+    const angle = (typeof spec.aimAngle === 'number') ? spec.aimAngle : this.angle;
+    const speed = conf.projectileSpeed || 430;
+    const muzzleOffset = conf.muzzleOffset || this.size;
+    const x = this.x + Math.cos(angle) * muzzleOffset;
+    const y = this.y + Math.sin(angle) * muzzleOffset;
+    bullets.push({
+      x,
+      y,
+      dx: Math.cos(angle) * speed,
+      dy: Math.sin(angle) * speed,
+      team: this.team,
+      ttl: conf.projectileTtl || 2.35,
+      damage: conf.projectileDamage || 155,
+      ownerShip: this,
+      raceId: this.type.id,
+      projectile:{
+        style:'yamatoBolt',
+        radius: conf.projectileRadius || 18,
+        speed,
+        aoeRadius: conf.aoeRadius || 125,
+        aoeDamage: conf.aoeDamage || 72,
+        fighterDamage: conf.fighterDamage || 95,
+        core: conf.core || [235,250,255],
+        mid: conf.mid || [110,190,255],
+        outer: conf.outer || [40,110,255]
+      },
+      seed: Math.random()*Math.PI*2
+    });
+    playLoudAudioSrc(TERRAN_YAMATO_FIRE_SOUND, 'terran_yamato_fire', 1.15);
+  }
+  drawYamatoCannon(ctx, spec){
+    const conf = spec.config || this.specialConfig || {};
+    const t = Math.max(0, Math.min(1, spec.age / Math.max(0.01, conf.chargeTime || 2.55)));
+    const angle = (typeof spec.aimAngle === 'number') ? spec.aimAngle : this.angle;
+    const x = this.x + Math.cos(angle) * (conf.muzzleOffset || this.size);
+    const y = this.y + Math.sin(angle) * (conf.muzzleOffset || this.size);
+    const r = 10 + t * 26;
+    ctx.save();
+    ctx.globalCompositeOperation = 'lighter';
+    const glow = ctx.createRadialGradient(x, y, r*0.1, x, y, r*2.2);
+    glow.addColorStop(0, `rgba(255,255,255,${0.82 + t*0.12})`);
+    glow.addColorStop(0.35, rgba(conf.core || [235,250,255], 0.75));
+    glow.addColorStop(0.68, rgba(conf.mid || [110,190,255], 0.55));
+    glow.addColorStop(1, 'rgba(0,0,0,0)');
+    ctx.fillStyle = glow;
+    ctx.beginPath();
+    ctx.arc(x, y, r*1.9, 0, Math.PI*2);
+    ctx.fill();
     ctx.restore();
   }
   // Render the clustered white ion exhaust jets unique to Obama's cruiser.
@@ -9684,6 +10332,9 @@ class Ship{
         break;
       case 'humperDash':
         this.drawHumperDash(ctx, spec);
+        break;
+      case 'yamatoCannon':
+        this.drawYamatoCannon(ctx, spec);
         break;
       case 'boardingPods':
         this.drawBoardingPods(ctx, spec);
@@ -10550,6 +11201,57 @@ function spawnExplosion(ship){
   });
 }
 
+function triggerYamatoDetonation(x, y, ownerShip, team, config){
+  const conf = config || {};
+  const aoeRadius = Math.max(24, conf.aoeRadius || 120);
+  const aoeDamage = Math.max(0, conf.aoeDamage || 70);
+  const fighterDamage = Math.max(0, conf.fighterDamage || aoeDamage);
+  const core = conf.core || [235,250,255];
+  const mid = conf.mid || [110,190,255];
+  const outer = conf.outer || [40,110,255];
+
+  ships.forEach(other=>{
+    if(!other || other.team === team || other.hp <= 0 || other.isWarping()) return;
+    const dist = Math.hypot(other.x - x, other.y - y);
+    if(dist > aoeRadius) return;
+    const t = Math.max(0, Math.min(1, 1 - (dist / aoeRadius)));
+    const splash = aoeDamage * (0.4 + 0.6 * t);
+    if(splash > 0.25) applyDamage(other, splash, ownerShip || null);
+  });
+
+  fighters.forEach(f=>{
+    if(!f || !f.alive || f.team === team) return;
+    const dist = Math.hypot(f.x - x, f.y - y);
+    if(dist > aoeRadius) return;
+    const t = Math.max(0, Math.min(1, 1 - (dist / aoeRadius)));
+    const splash = fighterDamage * (0.45 + 0.55 * t);
+    if(splash > 0.25) damageFighter(f, splash);
+  });
+
+  for(let i=0;i<22;i++){
+    const a = Math.random() * Math.PI * 2;
+    const sp = 80 + Math.random() * 260;
+    particles.push({
+      x,
+      y,
+      vx: Math.cos(a) * sp,
+      vy: Math.sin(a) * sp,
+      life: 0.18 + Math.random() * 0.22,
+      size: 1.4 + Math.random() * 2.2,
+      core: Math.random() < 0.45 ? core : mid,
+      mid: outer
+    });
+  }
+
+  explosions.push({
+    x,
+    y,
+    age: 0,
+    duration: 0.7,
+    maxRadius: aoeRadius
+  });
+}
+
 function randBetween(min, max){
   return min + Math.random() * (max - min);
 }
@@ -11200,11 +11902,70 @@ function createPickleFighter(parent, spec, conf, index, total, hpRestore){
   return fighter;
 }
 
+function getProtossInterceptorBay(parent){
+  if(!parent) return null;
+  const conf = (parent.type && parent.type.interceptor) || {};
+  const bay = parent.interceptorBay || (parent.interceptorBay = {fighters:[]});
+  bay.fighters = (bay.fighters || []).filter(f=> f && f.alive);
+  bay.maxActive = Math.max(1, conf.maxActive || 8);
+  return bay;
+}
+
+function launchProtossInterceptor(parent){
+  if(!parent || !parent.type || !parent.type.interceptor) return false;
+  const conf = parent.type.interceptor || {};
+  const bay = getProtossInterceptorBay(parent);
+  if(!bay || bay.fighters.length >= bay.maxActive) return false;
+  const index = bay.fighters.length;
+  const offset = (index - ((bay.maxActive - 1) / 2)) * 0.12;
+  const launchAngle = parent.angle + Math.PI + offset;
+  const launchDist = Math.max(parent.size * 0.95, 20);
+  const fighter = {
+    id: fighterIdCounter++,
+    kind: 'protossInterceptor',
+    parent,
+    team: parent.team,
+    x: parent.x + Math.cos(launchAngle) * launchDist,
+    y: parent.y + Math.sin(launchAngle) * launchDist,
+    vx: parent.vx * 0.55 + Math.cos(launchAngle) * 120,
+    vy: parent.vy * 0.55 + Math.sin(launchAngle) * 120,
+    speed: conf.speed || 365,
+    accel: conf.accel || 1080,
+    size: conf.size || 10,
+    hp: conf.hp || 18,
+    maxHp: conf.hp || 18,
+    fireInterval: conf.fireInterval || 0.24,
+    fireCooldown: 0.08 + (index % 4) * 0.04,
+    projectileDamage: conf.projectileDamage || 5,
+    projectileSpeed: conf.projectileSpeed || 640,
+    projectileTtl: conf.projectileTtl || 1.05,
+    engageRange: conf.engageRange || 150,
+    orbitRadius: conf.orbitRadius || 92,
+    orbitJitter: conf.orbitJitter || 18,
+    orbitDir: Math.random() < 0.5 ? -1 : 1,
+    orbitPhase: Math.random() * Math.PI * 2,
+    spriteKey: parent.type.fighterSpriteId || 'protoss_interceptor',
+    spriteScale: conf.spriteScale || 0.08,
+    spriteAngleOffset: -Math.PI / 2,
+    colorCore: conf.core || [255,240,180],
+    colorMid: conf.mid || [120,210,255],
+    colorTail: conf.tail || [90,140,255],
+    age: 0,
+    alive: true
+  };
+  bay.fighters.push(fighter);
+  fighters.push(fighter);
+  return true;
+}
+
 function updateFighters(dt){
   if(!fighters.length) return;
   fighters.forEach(f=>{
     if(!f || !f.alive) return;
     switch(f.kind){
+      case 'protossInterceptor':
+        updateProtossInterceptor(f, dt);
+        break;
       case 'pickleHive':
       default:
         updatePickleFighter(f, dt);
@@ -11270,6 +12031,66 @@ function updatePickleFighter(f, dt){
   f.y += f.vy * dt;
 }
 
+function steerFighterVelocity(fighter, desiredAngle, accel, dt, maxSpeed){
+  fighter.vx += Math.cos(desiredAngle) * accel * dt;
+  fighter.vy += Math.sin(desiredAngle) * accel * dt;
+  const speed = Math.hypot(fighter.vx, fighter.vy);
+  if(speed > maxSpeed){
+    fighter.vx = (fighter.vx / speed) * maxSpeed;
+    fighter.vy = (fighter.vy / speed) * maxSpeed;
+  }
+}
+
+function updateProtossInterceptor(f, dt){
+  f.age += dt;
+  if(!f.parent || f.parent.hp <= 0){
+    spawnFighterPop(f);
+    retireFighter(f);
+    return;
+  }
+  const target = getNearestEnemyShip(f.team, f);
+  f.target = target || null;
+  let desiredAngle = Math.atan2(f.parent.y - f.y, f.parent.x - f.x);
+  let accel = f.accel || 1080;
+  let maxSpeed = f.speed || 365;
+
+  if(target){
+    const dx = target.x - f.x;
+    const dy = target.y - f.y;
+    const dist = Math.hypot(dx, dy) || 1;
+    const towardAngle = Math.atan2(dy, dx);
+    const orbitRadius = Math.max(48, (f.orbitRadius || 92) + Math.sin(f.age * 2.8 + f.orbitPhase) * (f.orbitJitter || 18));
+    const tangentAngle = towardAngle + f.orbitDir * (Math.PI / 2);
+    const radiusError = dist - orbitRadius;
+    desiredAngle = tangentAngle + Math.max(-0.95, Math.min(0.95, radiusError / Math.max(40, orbitRadius))) * 0.7;
+    if(dist > orbitRadius * 1.7){
+      desiredAngle = desiredAngle + normalizeAngle(towardAngle - desiredAngle) * 0.58;
+      maxSpeed *= 1.06;
+    }
+    f.fireCooldown -= dt;
+    if(dist <= (f.engageRange || 150) && f.fireCooldown <= 0){
+      fireProtossInterceptorShot(f, towardAngle);
+      f.fireCooldown = f.fireInterval || 0.24;
+    }
+  } else {
+    const dx = f.parent.x - f.x;
+    const dy = f.parent.y - f.y;
+    const towardAngle = Math.atan2(dy, dx);
+    const dist = Math.hypot(dx, dy) || 1;
+    const orbitRadius = Math.max(26, (f.parent.size || 24) * 1.4);
+    const tangentAngle = towardAngle + f.orbitDir * (Math.PI / 2);
+    desiredAngle = tangentAngle + Math.max(-0.8, Math.min(0.8, (dist - orbitRadius) / orbitRadius)) * 0.6;
+    maxSpeed *= 0.92;
+  }
+
+  steerFighterVelocity(f, desiredAngle, accel, dt, maxSpeed);
+  const drag = target ? 0.996 : 0.99;
+  f.vx *= drag;
+  f.vy *= drag;
+  f.x += f.vx * dt;
+  f.y += f.vy * dt;
+}
+
 function firePickleFighterShot(fighter, angle){
   const speed = fighter.projectileSpeed || 420;
   bullets.push({
@@ -11301,6 +12122,41 @@ function firePickleFighterShot(fighter, angle){
     size: 0.8,
     core: fighter.colorCore,
     mid: fighter.colorMid
+  });
+}
+
+function fireProtossInterceptorShot(fighter, angle){
+  const speed = fighter.projectileSpeed || 640;
+  bullets.push({
+    x: fighter.x,
+    y: fighter.y,
+    dx: Math.cos(angle) * speed,
+    dy: Math.sin(angle) * speed,
+    team: fighter.team,
+    ttl: fighter.projectileTtl || 1.05,
+    damage: fighter.projectileDamage || 5,
+    ownerShip: fighter.parent || null,
+    raceId: 'protoss_interceptor',
+    projectile:{
+      style:'plasmaBolt',
+      length:18,
+      radius:3,
+      core: fighter.colorCore || [255,240,180],
+      mid: fighter.colorMid || [120,210,255],
+      tail: fighter.colorTail || [90,140,255]
+    },
+    seed: Math.random() * Math.PI * 2
+  });
+  playSfx('fire', 'protoss_interceptor');
+  particles.push({
+    x: fighter.x,
+    y: fighter.y,
+    vx: Math.cos(angle + Math.PI) * 55 + (Math.random() - 0.5) * 28,
+    vy: Math.sin(angle + Math.PI) * 55 + (Math.random() - 0.5) * 28,
+    life: 0.18,
+    size: 0.75,
+    core: fighter.colorCore || [255,240,180],
+    mid: fighter.colorMid || [120,210,255]
   });
 }
 
@@ -11390,28 +12246,46 @@ function drawFighters(ctx){
     ctx.save();
     ctx.translate(f.x, f.y);
     const angle = Math.atan2(f.vy, f.vx) || 0;
-    ctx.rotate(angle);
-    const bodyLen = Math.max(14, f.size*2.1);
-    const bodyWidth = Math.max(6, f.size*0.8);
-    const grad = ctx.createLinearGradient(-bodyLen/2, 0, bodyLen/2, 0);
-    grad.addColorStop(0, rgba(f.colorMid, 0.15));
-    grad.addColorStop(0.4, rgba(f.colorMid, 0.65));
-    grad.addColorStop(1, rgba(f.colorCore, 0.95));
-    ctx.fillStyle = grad;
-    ctx.beginPath();
-    ctx.moveTo(bodyLen/2, 0);
-    ctx.lineTo(-bodyLen/2, bodyWidth/2);
-    ctx.lineTo(-bodyLen/2, -bodyWidth/2);
-    ctx.closePath();
-    ctx.fill();
-    const glow = ctx.createRadialGradient(0,0,0,0,0,bodyWidth*1.6);
-    glow.addColorStop(0, rgba(f.colorCore, 0.9));
-    glow.addColorStop(1, 'rgba(0,0,0,0)');
-    ctx.fillStyle = glow;
-    ctx.globalAlpha = 0.65;
-    ctx.beginPath();
-    ctx.arc(0,0,bodyWidth,0,Math.PI*2);
-    ctx.fill();
+    const sprite = f.spriteKey ? SHIP_SPRITES[f.spriteKey] : null;
+    if(sprite){
+      ctx.rotate(angle + (f.spriteAngleOffset || 0));
+      const scale = f.spriteScale || 0.08;
+      const w = sprite.width * scale;
+      const h = sprite.height * scale;
+      ctx.globalCompositeOperation = 'lighter';
+      const glow = ctx.createRadialGradient(0,0,0,0,0,Math.max(w, h) * 0.7);
+      glow.addColorStop(0, rgba(f.colorCore || [255,255,255], 0.32));
+      glow.addColorStop(1, 'rgba(0,0,0,0)');
+      ctx.fillStyle = glow;
+      ctx.beginPath();
+      ctx.arc(0, 0, Math.max(w, h) * 0.5, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.globalCompositeOperation = 'source-over';
+      ctx.drawImage(sprite, -w / 2, -h / 2, w, h);
+    } else {
+      ctx.rotate(angle);
+      const bodyLen = Math.max(14, f.size*2.1);
+      const bodyWidth = Math.max(6, f.size*0.8);
+      const grad = ctx.createLinearGradient(-bodyLen/2, 0, bodyLen/2, 0);
+      grad.addColorStop(0, rgba(f.colorMid, 0.15));
+      grad.addColorStop(0.4, rgba(f.colorMid, 0.65));
+      grad.addColorStop(1, rgba(f.colorCore, 0.95));
+      ctx.fillStyle = grad;
+      ctx.beginPath();
+      ctx.moveTo(bodyLen/2, 0);
+      ctx.lineTo(-bodyLen/2, bodyWidth/2);
+      ctx.lineTo(-bodyLen/2, -bodyWidth/2);
+      ctx.closePath();
+      ctx.fill();
+      const glow = ctx.createRadialGradient(0,0,0,0,0,bodyWidth*1.6);
+      glow.addColorStop(0, rgba(f.colorCore, 0.9));
+      glow.addColorStop(1, 'rgba(0,0,0,0)');
+      ctx.fillStyle = glow;
+      ctx.globalAlpha = 0.65;
+      ctx.beginPath();
+      ctx.arc(0,0,bodyWidth,0,Math.PI*2);
+      ctx.fill();
+    }
     ctx.restore();
   });
   ctx.restore();
@@ -11817,6 +12691,42 @@ if(menuMultiplayerBtn){
     showMultiplayerOverlay({fromMenu:true});
   });
 }
+if(menuSettingsBtn){
+  menuSettingsBtn.addEventListener('click', ()=>{
+    playUiClick();
+    showSettingsOverlay();
+  });
+}
+if(settingsCloseBtn){
+  settingsCloseBtn.addEventListener('click', ()=>{
+    playUiClick();
+    hideSettingsOverlay();
+  });
+}
+if(settingsDoneBtn){
+  settingsDoneBtn.addEventListener('click', ()=>{
+    playUiClick();
+    hideSettingsOverlay();
+  });
+}
+if(settingsResetBtn){
+  settingsResetBtn.addEventListener('click', ()=>{
+    playUiClick();
+    audioSettings = {...DEFAULT_AUDIO_SETTINGS};
+    applyAudioSettings();
+  });
+}
+if(settingsOverlay){
+  settingsOverlay.addEventListener('click', (evt)=>{
+    if(evt.target === settingsOverlay) hideSettingsOverlay();
+  });
+}
+if(musicVolumeInput){
+  musicVolumeInput.addEventListener('input', ()=> setMusicVolumeFromUi(musicVolumeInput.value));
+}
+if(sfxVolumeInput){
+  sfxVolumeInput.addEventListener('input', ()=> setSfxVolumeFromUi(sfxVolumeInput.value));
+}
 if(profileCloseBtn){
   profileCloseBtn.addEventListener('click', ()=>{
     playUiClick();
@@ -12112,7 +13022,7 @@ function loop(t){
           });
         }
       }
-      if(b.projectile && b.projectile.style === 'fireball'){
+      if(b.projectile && (b.projectile.style === 'fireball' || b.projectile.style === 'yamatoBolt')){
         const proj = b.projectile || {};
         const drag = Math.max(0.92, Math.min(1, proj.driftDrag || 0.985));
         b.dx *= drag;
@@ -12123,7 +13033,7 @@ function loop(t){
           const ang = Math.atan2(b.dy, b.dx);
           const core = proj.core || [255,230,170];
           const mid = proj.mid || [255,150,70];
-          const rim = proj.rim || [190,70,20];
+          const rim = proj.rim || proj.outer || [190,70,20];
           const tail = Math.max(14, proj.tailLength || 54);
           const off = 6 + Math.random()*10;
           particles.push({
@@ -12569,6 +13479,10 @@ function loop(t){
       b.x += b.dx*gameDt;
       b.y += b.dy*gameDt;
       b.ttl -= gameDt;
+      if(b.projectile && b.projectile.style === 'yamatoBolt' && b.ttl <= 0 && !b._yamatoDetonated){
+        b._yamatoDetonated = true;
+        triggerYamatoDetonation(b.x, b.y, b.ownerShip || null, b.team, b.projectile || {});
+      }
     });
     bullets = bullets.filter(b=>{
       if(!b || !(b.ttl > 0)) return false;
@@ -12747,7 +13661,14 @@ function loop(t){
               }
               return;
             }
-            if(style === 'mine'){
+            if(style === 'yamatoBolt'){
+              applyDamage(s, b.damage != null ? b.damage : ((b.projectile && b.projectile.damage) || 155), b.ownerShip || null);
+              if(!b._yamatoDetonated){
+                b._yamatoDetonated = true;
+                triggerYamatoDetonation(b.x, b.y, b.ownerShip || null, b.team, b.projectile || {});
+              }
+              b.ttl = 0;
+            } else if(style === 'mine'){
               const proj = b.projectile || {};
               const mineDamage = b.damage != null ? b.damage : (proj.damage || 12);
               const mineAoERadius = Math.max(10, proj.mineAoERadius || 70);
@@ -12862,6 +13783,12 @@ function loop(t){
               b.dy = ny * bounceSpeed;
               b.x = f.x + nx * (radius + 6);
               b.y = f.y + ny * (radius + 6);
+            } else if(style === 'yamatoBolt'){
+              if(!b._yamatoDetonated){
+                b._yamatoDetonated = true;
+                triggerYamatoDetonation(b.x, b.y, b.ownerShip || null, b.team, b.projectile || {});
+              }
+              b.ttl = 0;
             } else {
               const damage = b.damage != null ? b.damage : ((b.projectile && b.projectile.damage) || 8);
               damageFighter(f, damage);
@@ -12889,6 +13816,14 @@ function loop(t){
               b.dy = ny * bounceSpeed;
               b.x = p.x + nx * (p.r + 18);
               b.y = p.y + ny * (p.r + 18);
+              continue;
+            }
+            if(style === 'yamatoBolt'){
+              if(!b._yamatoDetonated){
+                b._yamatoDetonated = true;
+                triggerYamatoDetonation(b.x, b.y, b.ownerShip || null, b.team, b.projectile || {});
+              }
+              b.ttl = 0;
               continue;
             }
             // Horror boss demonstrates power: one shot deletes a planet.
@@ -14055,13 +14990,13 @@ function loop(t){
       ctx.lineWidth = Math.max(0.6, width * 0.6);
       ctx.beginPath(); ctx.moveTo(drawLen*0.4,0); ctx.lineTo(drawLen,0); ctx.stroke();
       ctx.restore();
-    } else if(style === 'fireball'){
+    } else if(style === 'fireball' || style === 'yamatoBolt'){
       const radius = (b.projectile && b.projectile.radius) || 10;
       const tailLength = Math.max(26, (b.projectile && b.projectile.tailLength) || 58);
       const tailWidth = Math.max(10, (b.projectile && b.projectile.tailWidth) || 22);
       const core = (b.projectile && b.projectile.core) || [255,230,170];
       const mid = (b.projectile && b.projectile.mid) || [255,150,70];
-      const rim = (b.projectile && b.projectile.rim) || [190,70,20];
+      const rim = (b.projectile && (b.projectile.rim || b.projectile.outer)) || [190,70,20];
       const angle = Math.atan2(b.dy, b.dx);
       const pulse = 0.82 + 0.22 * Math.sin((performance.now ? performance.now() : Date.now()) * 0.016 + (b.seed || 0));
       ctx.save();

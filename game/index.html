@@ -224,6 +224,29 @@
       </div>
     </div>
   </div>
+  <div id="settings-overlay" class="overlay hidden" aria-hidden="true">
+    <div class="overlay-card profile-card settings-card" role="dialog" aria-modal="true" aria-labelledby="settings-title">
+      <button class="overlay-close" id="settings-close" aria-label="Close settings overlay">&times;</button>
+      <h2 id="settings-title">Audio Settings</h2>
+      <p>Tune the music and sound effects separately.</p>
+      <div class="settings-form">
+        <label class="settings-row" for="music-volume">
+          <span>Music Volume</span>
+          <input id="music-volume" type="range" min="0" max="100" step="1" value="65">
+          <strong id="music-volume-value">65%</strong>
+        </label>
+        <label class="settings-row" for="sfx-volume">
+          <span>SFX Volume</span>
+          <input id="sfx-volume" type="range" min="0" max="100" step="1" value="100">
+          <strong id="sfx-volume-value">100%</strong>
+        </label>
+      </div>
+      <div class="overlay-actions">
+        <button id="settings-reset" type="button" class="ghost">Reset</button>
+        <button id="settings-done" type="button">Done</button>
+      </div>
+    </div>
+  </div>
   <div id="multiplayer-overlay" class="overlay hidden" aria-hidden="true">
     <div class="overlay-card lobby-card" role="dialog" aria-modal="true" aria-labelledby="lobby-title">
       <button class="overlay-close" id="lobby-close" aria-label="Close multiplayer overlay">&times;</button>
