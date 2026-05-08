@@ -1164,6 +1164,49 @@ const SHIP_TYPES = [
       drawLength:20
     }
   }),
+  createPlaceholderShip({id:'grox', name:'Grox', classLabel:'Empire Warship', color:'#79b0ff', spriteFile:'../Grox.png',
+    size:30,
+    speed:118,
+    hp:245,
+    fireRate:520,
+    spriteScale:0.16,
+    trailColors:{core:[180,220,255],mid:[80,120,220]},
+    notes:'Grox warship armed with punishing lasers and missiles, protected by a temporary shield pulse.',
+    special:{
+      type:'regenPulse',
+      cost:26,
+      cooldown:8,
+      duration:3.4,
+      drainPerSecond:12,
+      healPerSecond:8,
+      breakOnDamage:24,
+      damageReduction:0.58
+    },
+    projectile:{
+      style:'groxArsenal',
+      damage:24,
+      laserLength:700,
+      laserWidth:6,
+      laserTtl:0.09,
+      missileDamage:18,
+      missileSpeed:340,
+      missileAccel:820,
+      missileTtl:2.45,
+      missileTurnRate:3.3,
+      missileTurnAssist:0.9,
+      missileLeadTime:0.18,
+      missileWobble:0.06,
+      muzzleOffset:28,
+      core:[210,235,255],
+      mid:[120,170,255],
+      accent:[255,255,255],
+      missileColors:{
+        body:[220,230,255],
+        stripe:[110,160,255],
+        glow:[180,220,255]
+      }
+    }
+  }),
   createPlaceholderShip({id:'criminal', name:'Criminal', classLabel:'Syndicate Prototype', color:'#b36b5c', trailColors:{core:[255,242,190],mid:[255,200,90]}, spriteFile:'assets/ships/criminals.png',
     size:28,
     spriteScale:0.11,
@@ -4788,6 +4831,19 @@ function ensureAvatarSetLoaded(raceId){
       `assets/avatars/${raceId}/idle`,
       `assets/avatars/idle`
     ];
+    if(raceId === 'grox'){
+      const groxRootBases = {
+        idle: ['../Grox Idle'],
+        left: ['../Grox Left'],
+        right: ['../Grox Right'],
+        thrust: ['../Grox Idle'],
+        fire: ['../Grox Idle'],
+        special: ['../Grox Idle'],
+        victory: ['../Grox Idle']
+      };
+      const extra = groxRootBases[state] || groxRootBases.idle;
+      basePaths.unshift(...extra);
+    }
     const sources = [];
     const seenSources = new Set();
     basePaths.forEach(base=>{
@@ -4970,6 +5026,14 @@ function ensureSfxForRace(raceId){
       const audio = new Audio();
       audio.preload = 'auto';
       audio.src = '../starcraft-2-battle.mp3';
+      try{ audio.load(); }catch(err){}
+      store[cue] = audio;
+      return;
+    }
+    if(raceId === 'grox' && cue === 'special'){
+      const audio = new Audio();
+      audio.preload = 'auto';
+      audio.src = '../Grox Special.mp3';
       try{ audio.load(); }catch(err){}
       store[cue] = audio;
       return;
@@ -9169,6 +9233,9 @@ class Ship{
         const specRange = (this.specialConfig.projectileSpeed || 430) * (this.specialConfig.projectileTtl || 2.35) * 0.88;
         shouldUse = canSeeTarget && dist <= specRange;
         if(shouldUse && Math.random() < 0.7) shouldUse = false;
+      } else if(this.specialConfig.type === 'regenPulse'){
+        const underPressure = this.hp < this.type.hp * 0.7;
+        shouldUse = underPressure || (canSeeTarget && dist <= preferRange * 0.95 && Math.random() < 0.18);
       } else if(this.specialConfig.type === 'confusionRay'){
         const specRange = (this.specialConfig.range || preferRange) * 0.95;
         shouldUse = canSeeTarget && dist <= specRange;
@@ -9395,6 +9462,104 @@ class Ship{
   }
   shoot(angle){
     const projectile = this.projectileConfig || {};
+
+    if(projectile && projectile.style === 'groxArsenal'){
+      const energyCost = this.energyCost || 8;
+      if(this.energy < energyCost) return false;
+      this.energy = Math.max(0, this.energy - energyCost);
+      const muzzleOffset = projectile.muzzleOffset || this.size;
+      const originX = this.x + Math.cos(angle) * muzzleOffset;
+      const originY = this.y + Math.sin(angle) * muzzleOffset;
+      const length = Math.max(140, projectile.laserLength || 700);
+      let endX = originX + Math.cos(angle) * length;
+      let endY = originY + Math.sin(angle) * length;
+      let hitShip = null;
+      let bestT = Infinity;
+      const dirX = Math.cos(angle);
+      const dirY = Math.sin(angle);
+      ships.forEach(s=>{
+        if(!s || s.team === this.team || s.hp <= 0 || s.isWarping()) return;
+        const vx = s.x - originX;
+        const vy = s.y - originY;
+        const t = (vx * dirX + vy * dirY);
+        if(t < 0 || t > length) return;
+        const cx = originX + dirX * t;
+        const cy = originY + dirY * t;
+        const dist = Math.hypot(s.x - cx, s.y - cy);
+        const r = Math.max(8, (s.size || 18) * 0.82);
+        if(dist <= r && t < bestT){
+          bestT = t;
+          hitShip = s;
+        }
+      });
+      const damageMult = this.mod ? (this.mod.damageMult || 1) : 1;
+      const laserDamage = Math.max(0, (projectile.damage != null ? projectile.damage : 24) * damageMult);
+      if(hitShip){
+        endX = originX + dirX * bestT;
+        endY = originY + dirY * bestT;
+        applyDamage(hitShip, laserDamage, this);
+      }
+      bullets.push({
+        x: originX,
+        y: originY,
+        dx: 0,
+        dy: 0,
+        team: this.team,
+        ttl: projectile.laserTtl || 0.09,
+        damage: laserDamage,
+        ownerShip: this,
+        raceId: this.type.id,
+        projectile:{
+          style:'laserShot',
+          width: projectile.laserWidth || 6,
+          core: projectile.core || [210,235,255],
+          mid: projectile.mid || [120,170,255]
+        },
+        endX,
+        endY,
+        seed: Math.random()*Math.PI*2
+      });
+
+      bullets.push({
+        x: originX,
+        y: originY,
+        dx: Math.cos(angle) * (projectile.missileSpeed || 340),
+        dy: Math.sin(angle) * (projectile.missileSpeed || 340),
+        team: this.team,
+        ttl: projectile.missileTtl || 2.45,
+        damage: Math.max(0, (projectile.missileDamage || 18) * damageMult),
+        ownerShip: this,
+        raceId: this.type.id,
+        projectile:{
+          style:'missile',
+          speed: projectile.missileSpeed || 340,
+          accel: projectile.missileAccel || 820,
+          ttl: projectile.missileTtl || 2.45,
+          turnRate: projectile.missileTurnRate || 3.3,
+          turnAssist: projectile.missileTurnAssist ?? 0.9,
+          leadTime: projectile.missileLeadTime || 0.18,
+          wobble: projectile.missileWobble || 0.06,
+          lockDistance: 48,
+          colors: projectile.missileColors || {
+            body:[220,230,255],
+            stripe:[110,160,255],
+            glow:[180,220,255]
+          }
+        },
+        seed: Math.random()*Math.PI*2
+      });
+
+      this.lastShotAt = performance.now ? performance.now() : Date.now();
+      if(this.activeSpecial && this.activeSpecial.type === 'lunarCloak'){
+        this.activeSpecial.forceEnd = true;
+        this.endCloak();
+        this.activeSpecial = null;
+      }
+      if(this.control){
+        lastShotTime = performance.now();
+      }
+      return true;
+    }
 
     if(projectile && projectile.style === 'basiliskDualLaser'){
       if(this.basiliskCharge) return false;
@@ -12303,6 +12468,13 @@ function applyDamage(ship, amount, attacker){
     if(spec.invulnerableDuringDash) return;
     if(spec.damageReduction){
       const clamp = Math.max(0, Math.min(0.99, spec.damageReduction));
+      finalAmount *= (1 - clamp);
+    }
+  }
+  if(spec && spec.type === 'regenPulse'){
+    const conf = spec.config || ship.specialConfig || {};
+    if(typeof conf.damageReduction === 'number'){
+      const clamp = Math.max(0, Math.min(0.99, conf.damageReduction));
       finalAmount *= (1 - clamp);
     }
   }
