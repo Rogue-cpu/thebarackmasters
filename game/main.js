@@ -1165,12 +1165,12 @@ const SHIP_TYPES = [
     }
   }),
   createPlaceholderShip({id:'grox', name:'Grox', classLabel:'Empire Warship', color:'#79b0ff', spriteFile:'../Grox.png',
-    size:30,
+    size:24,
     speed:118,
     hp:245,
     fireRate:520,
-    spriteScale:0.16,
-    trailColors:{core:[180,220,255],mid:[80,120,220]},
+    spriteScale:0.095,
+    trailColors:{core:[221,160,221],mid:[120,70,140]},
     notes:'Grox warship armed with punishing lasers and missiles, protected by a temporary shield pulse.',
     special:{
       type:'regenPulse',
