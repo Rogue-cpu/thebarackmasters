@@ -762,6 +762,7 @@ function createPlaceholderShip(options){
     fighterSpriteFile: cfg.fighterSpriteFile || null,
     fighterSpriteId: cfg.fighterSpriteId || null,
     spriteAngleOffset: cfg.spriteAngleOffset ?? -Math.PI/2,
+    overlayRotation: cfg.overlayRotation,
     spriteScale: cfg.spriteScale || 0.08,
     trailColors: cfg.trailColors || DEFAULT_TRAIL_COLORS,
     energyCapacity: cfg.energyCapacity,
@@ -1127,6 +1128,7 @@ const SHIP_TYPES = [
     hp:275,
     fireRate:210,
     spriteAngleOffset:Math.PI,
+    overlayRotation:270,
     spriteScale:0.14,
     trailColors:{core:[255,190,110],mid:[180,70,20]},
     notes:'Heavy gunship with a frontal barrage and a devastating Yamato Cannon.',
@@ -1205,6 +1207,168 @@ const SHIP_TYPES = [
         stripe:[110,160,255],
         glow:[180,220,255]
       }
+    }
+  }),
+  createPlaceholderShip({id:'imperial', name:'Imperial', classLabel:'Star Destroyer', color:'#b7c8de', spriteFile:'../Imperial.png', fighterSpriteId:'imperial_tie', fighterSpriteFile:'../Tie Fighter.png',
+    size:44,
+    speed:84,
+    hp:360,
+    fireRate:260,
+    spriteAngleOffset:-Math.PI/2,
+    spriteScale:0.24,
+    trailColors:{core:[180,230,255],mid:[90,140,190]},
+    notes:'Heavy Star Destroyer that pours out green turbolaser fire and launches TIE fighters as its special.',
+    special:{
+      type:'pickleHive',
+      cost:24,
+      cooldown:8,
+      duration:16,
+      count:2,
+      fighter:{
+        maxActive:6,
+        hp:18,
+        speed:350,
+        accel:860,
+        size:9,
+        fireInterval:0.28,
+        projectileDamage:5,
+        projectileSpeed:620,
+        projectileTtl:1.1,
+        returnTime:18,
+        spriteKey:'imperial_tie',
+        spriteScale:0.075,
+        spriteAngleOffset:-Math.PI/2,
+        projectileStyle:'plasmaBolt',
+        projectileLength:18,
+        projectileRadius:3,
+        core:[170,255,170],
+        mid:[70,210,90],
+        tail:[30,110,35]
+      }
+    },
+    projectile:{
+      style:'bullet',
+      length:26,
+      width:3.2,
+      core:[170,255,170],
+      mid:[70,210,90],
+      speed:980,
+      ttl:1.2,
+      muzzleOffset:40,
+      hitRadius:2.6,
+      dualShot:true,
+      dualSeparation:14,
+      damage:13
+    }
+  }),
+  createPlaceholderShip({id:'seperatist', name:'Seperatist', classLabel:'Providence Destroyer', color:'#d48c62', spriteFile:'../Seperatist.png',
+    size:40,
+    speed:92,
+    hp:315,
+    fireRate:340,
+    spriteAngleOffset:Math.PI,
+    overlayRotation:90,
+    spriteScale:0.23,
+    trailColors:{core:[255,210,140],mid:[190,90,45]},
+    notes:'Providence-class warship that saturates the front arc with orange plasma and missile salvos.',
+    special:{
+      type:'boardingPods',
+      cost:24,
+      cooldown:10,
+      podCount:3,
+      podSpeed:310,
+      podAccel:620,
+      podSpread:0.24,
+      latchRadius:20,
+      boardDuration:7.2,
+      damagePerSecond:18,
+      marineCount:6,
+      defenderKillPerSecond:0.3,
+      podGlow:[255,190,120],
+      podShell:[125,70,35]
+    },
+    projectile:{
+      style:'lifePellet',
+      core:[255,240,170],
+      mid:[255,150,70],
+      tail:[175,75,30],
+      width:2.8,
+      radius:2.4,
+      speed:760,
+      muzzleOffset:34,
+      ttl:1.25,
+      damage:10,
+      scatterCount:4,
+      scatterSpread:0.28,
+      drawLength:18
+    }
+  }),
+  createPlaceholderShip({id:'unsc', name:'UNSC', classLabel:'Infinity Class', color:'#93b7dc', spriteFile:'../UNSC.png',
+    size:46,
+    speed:90,
+    hp:355,
+    fireRate:520,
+    spriteAngleOffset:0,
+    overlayRotation:270,
+    spriteScale:0.25,
+    trailColors:{core:[170,220,255],mid:[70,130,180]},
+    notes:'Supercarrier-style warship with MAC-like kinetic slugs and a devastating heavy beam cannon.',
+    special:{
+      type:'waveMotionGun',
+      cost:34,
+      cooldown:11,
+      duration:0.18,
+      width:24,
+      length:980,
+      damagePerSecond:940,
+      flash:0.45
+    },
+    projectile:{
+      style:'bullet',
+      length:32,
+      width:4.2,
+      core:[255,245,220],
+      mid:[140,210,255],
+      speed:1220,
+      ttl:1.4,
+      muzzleOffset:46,
+      hitRadius:3.6,
+      damage:28
+    }
+  }),
+  createPlaceholderShip({id:'combine', name:'Combine', classLabel:'Overwatch Destroyer', color:'#d7b06d', spriteFile:'../Combine.png',
+    size:34,
+    speed:118,
+    hp:265,
+    fireRate:260,
+    spriteAngleOffset:-Math.PI/2,
+    spriteScale:0.19,
+    trailColors:{core:[255,205,120],mid:[145,90,30]},
+    notes:'Combine assault ship with pulse bursts and a hard-light shield surge.',
+    special:{
+      type:'regenPulse',
+      cost:22,
+      cooldown:8,
+      duration:3.2,
+      drainPerSecond:10,
+      healPerSecond:6,
+      breakOnDamage:28,
+      damageReduction:0.46
+    },
+    projectile:{
+      style:'lifePellet',
+      core:[255,245,190],
+      mid:[255,175,80],
+      tail:[140,80,25],
+      width:2.6,
+      radius:2.1,
+      speed:860,
+      muzzleOffset:28,
+      ttl:0.95,
+      damage:9,
+      scatterCount:3,
+      scatterSpread:0.16,
+      drawLength:16
     }
   }),
   createPlaceholderShip({id:'criminal', name:'Criminal', classLabel:'Syndicate Prototype', color:'#b36b5c', trailColors:{core:[255,242,190],mid:[255,200,90]}, spriteFile:'assets/ships/criminals.png',
@@ -1920,8 +2084,7 @@ function buildShipPicker(){
     if(type.id !== 'random') {
       const shipImg = card.querySelector('.ship-card-img img');
       if(shipImg){
-        if(typeof type.overlayRotation === 'number') shipImg.style.transform = `rotate(${type.overlayRotation}deg)`;
-        else shipImg.style.transform = '';
+        applyShipPreviewRotation(shipImg, type);
         // Add event to open subfaction/skin modal
         shipImg.addEventListener('click', (evt)=>{
           evt.preventDefault();
@@ -1961,6 +2124,19 @@ function buildShipPicker(){
   });
   updateOverlaySelection();
 }
+
+function applyShipPreviewRotation(imgEl, shipType){
+  if(!imgEl || !shipType) return;
+  if(typeof shipType.overlayRotation === 'number'){
+    const rotation = `${shipType.overlayRotation}deg`;
+    imgEl.style.setProperty('--ship-preview-rotation', rotation);
+    imgEl.style.transform = `translateZ(0) rotate(${rotation})`;
+  } else {
+    imgEl.style.removeProperty('--ship-preview-rotation');
+    imgEl.style.transform = '';
+  }
+}
+
 // Subfaction/Skin Modal Logic
 const subfactionModal = document.getElementById('subfaction-modal');
 const subfactionModalCard = document.getElementById('subfaction-modal-card');
@@ -2016,6 +2192,7 @@ function openSubfactionModal(shipType) {
       img.style.objectFit = 'contain';
       img.style.borderRadius = '8px';
       img.style.background = '#111a';
+      applyShipPreviewRotation(img, shipType);
       // Select button
       const btn = document.createElement('button');
       btn.type = 'button';
@@ -2458,11 +2635,7 @@ function updatePanelDisplay(team, shipType, raceEl, shipImgEl, captainEl){
     const sprite = SHIP_SPRITES[shipType.id];
     shipImgEl.src = sprite ? sprite.src : spriteSrc;
     shipImgEl.alt = `${shipType.name} ship sprite`;
-    if(typeof shipType.overlayRotation === 'number'){
-      shipImgEl.style.transform = `rotate(${shipType.overlayRotation}deg)`;
-    } else {
-      shipImgEl.style.transform = '';
-    }
+    applyShipPreviewRotation(shipImgEl, shipType);
   }
   if(captainEl){
     const assigned = captainAssignments[team];
@@ -12060,8 +12233,16 @@ function createPickleFighter(parent, spec, conf, index, total, hpRestore){
     orbitPhase: index * Math.PI * 0.8,
     restoreAmount: hpRestore != null ? hpRestore : 0,
     alive: true,
+    spriteKey: conf.spriteKey || parent.type.fighterSpriteId || null,
+    spriteScale: conf.spriteScale || 0.08,
+    spriteAngleOffset: conf.spriteAngleOffset != null ? conf.spriteAngleOffset : -Math.PI / 2,
     colorCore: conf.core || [235,255,210],
-    colorMid: conf.mid || [150,235,170]
+    colorMid: conf.mid || [150,235,170],
+    colorTail: conf.tail || [70,160,100],
+    projectileStyle: conf.projectileStyle || 'plasmaBolt',
+    projectileLength: conf.projectileLength || 22,
+    projectileRadius: conf.projectileRadius || 3,
+    projectileWidth: conf.projectileWidth || 2.5
   };
   fighters.push(fighter);
   return fighter;
@@ -12269,12 +12450,14 @@ function firePickleFighterShot(fighter, angle){
     ownerShip: fighter.parent || null,
     raceId: fighter.parent ? fighter.parent.type.id : 'pickle',
     projectile:{
-      style:'plasmaBolt',
-      length:22,
-      radius:3,
+      style:fighter.projectileStyle || 'plasmaBolt',
+      length:fighter.projectileLength || 22,
+      radius:fighter.projectileRadius || 3,
+      width:fighter.projectileWidth || 2.5,
       core:[235,255,220],
-      mid:[150,235,170],
-      tail:[70,160,100]
+      core:fighter.colorCore || [235,255,220],
+      mid:fighter.colorMid || [150,235,170],
+      tail:fighter.colorTail || [70,160,100]
     },
     seed: Math.random()*Math.PI*2
   });
