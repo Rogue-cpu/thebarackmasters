@@ -66,6 +66,7 @@
   const PLANET_TILT = 0.56;
   const EARTH_STARBASE = {x:142,y:-58,radius:18};
   const PLANET_SCAN_DURATION = 2.8;
+  const PLANET_REVEAL_DURATION = 1.35;
   const HYPER_FUEL_PER_UNIT = 0.12;
   const BASE_TURN_RATE = 0.82;
   const STARMAP_BOUNDS = {left:-2050,right:1950,top:-1500,bottom:1500};
@@ -166,10 +167,21 @@
   const flagshipSprite = new Image();
   flagshipSprite.src = 'assets/story/vanguard-flagship.png';
   const FLAGSHIP_SPRITE_ROTATION = Math.PI/2;
+  const planetLanderSprite = new Image();
+  planetLanderSprite.src = 'assets/story/planet-lander.png';
+  const descendingLanderSprite = new Image();
+  descendingLanderSprite.src = 'assets/story/lander-descending.png';
   const shipyardTheme = new Audio('assets/music/shipyard-theme.mp3');
   shipyardTheme.loop = true;
   const starbaseTheme = new Audio('assets/music/starbase-theme.mp3');
   starbaseTheme.loop = true;
+  const orbitThemes = [1,2,3,4,5].map(index=>{
+    const theme=new Audio(`assets/music/orbit-${index}.mp3`);
+    theme.preload='metadata';
+    return theme;
+  });
+  let activeOrbitTheme = null;
+  let activeOrbitThemeIndex = -1;
 
   const state = {
     mode:'system',
@@ -193,6 +205,8 @@
     planetSurveys:{},
     scanAnimation:{type:null,elapsed:0,queue:[]},
     surfaceNodes:[],
+    planetRevealTimer:0,
+    planetRevealReady:false,
     landingTimer:0,
     takeoffTimer:0,
     takeoffOrigin:{x:0.5,y:0.5},
@@ -293,6 +307,7 @@
 
   function playStarbaseTheme(){
     stopShipyardTheme();
+    stopOrbitTheme();
     try{
       starbaseTheme.volume=typeof getMusicVolume==='function'?getMusicVolume(0.65):0.55;
       const attempt=starbaseTheme.play();
@@ -303,6 +318,42 @@
   function stopStarbaseTheme(){
     try{starbaseTheme.pause();starbaseTheme.currentTime=0;}catch(err){}
   }
+
+  function isPlanetMusicMode(){
+    return ['planet','planetDetail','landing','surface','takeoff'].includes(state.mode);
+  }
+
+  function playOrbitTheme(selectNew=false){
+    if(!orbitThemes.length||!isPlanetMusicMode()) return;
+    stopShipyardTheme();
+    stopStarbaseTheme();
+    if(!selectNew&&activeOrbitTheme&&!activeOrbitTheme.paused) return;
+    if(activeOrbitTheme){try{activeOrbitTheme.pause();activeOrbitTheme.currentTime=0;}catch(err){}}
+    let nextIndex=Math.floor(Math.random()*orbitThemes.length);
+    if(orbitThemes.length>1&&nextIndex===activeOrbitThemeIndex){
+      nextIndex=(nextIndex+1+Math.floor(Math.random()*(orbitThemes.length-1)))%orbitThemes.length;
+    }
+    activeOrbitThemeIndex=nextIndex;
+    activeOrbitTheme=orbitThemes[nextIndex];
+    try{
+      activeOrbitTheme.currentTime=0;
+      activeOrbitTheme.volume=typeof getMusicVolume==='function'?getMusicVolume(0.62):0.52;
+      const attempt=activeOrbitTheme.play();
+      if(attempt&&typeof attempt.catch==='function') attempt.catch(()=>{});
+    }catch(err){}
+  }
+
+  function stopOrbitTheme(){
+    if(!activeOrbitTheme) return;
+    try{activeOrbitTheme.pause();activeOrbitTheme.currentTime=0;}catch(err){}
+    activeOrbitTheme=null;
+  }
+
+  orbitThemes.forEach(theme=>theme.addEventListener('ended',()=>{
+    if(theme!==activeOrbitTheme||!storyActive||!isPlanetMusicMode()) return;
+    activeOrbitTheme=null;
+    playOrbitTheme(true);
+  }));
 
   function getShipyardCatalog(){
     if(typeof SHIP_TYPES==='undefined') return [];
@@ -567,6 +618,8 @@
     state.planetSurveys = {};
     state.scanAnimation = {type:null,elapsed:0,queue:[]};
     state.surfaceNodes = [];
+    state.planetRevealTimer = 0;
+    state.planetRevealReady = false;
     state.landingTimer = 0;
     state.takeoffTimer = 0;
     state.takeoffOrigin = {x:0.5,y:0.5};
@@ -595,6 +648,7 @@
     setPlanetOpsVisible(false);
     stopShipyardTheme();
     stopStarbaseTheme();
+    stopOrbitTheme();
     if(controlsLabel) controlsLabel.innerHTML = 'W / ↑ THRUST&nbsp;&nbsp; A D / ← → TURN&nbsp;&nbsp; E INTERACT&nbsp;&nbsp; ESC MENU';
     updateUi();
   }
@@ -692,6 +746,7 @@
     storyActive = false;
     stopShipyardTheme();
     stopStarbaseTheme();
+    stopOrbitTheme();
     cancelAnimationFrame(frameId);
     intro.classList.add('hidden');
     intro.classList.remove('fading', 'playing');
@@ -926,6 +981,13 @@
       else if(localDistance>PLANET_EDGE && state.transitionLock<=0) exitPlanetSystem();
     }else if(state.mode === 'planetDetail'){
       if(interaction) interaction.classList.add('hidden');
+      state.planetRevealTimer=Math.min(PLANET_REVEAL_DURATION,state.planetRevealTimer+dt);
+      if(!state.planetRevealReady&&state.planetRevealTimer>=.95){
+        state.planetRevealReady=true;
+        if(planetOpsMenu) planetOpsMenu.classList.remove('hidden');
+        if(controlsLabel) controlsLabel.textContent='SELECT A SCAN OR DISPATCH THE PLANET LANDER';
+        setLog('SCIENCE',`${state.planet.name} orbital survey ready. Select a scan channel.`,6);
+      }
       updatePlanetScan(dt);
     }else if(state.mode === 'landing'){
       state.landingTimer += dt;
@@ -962,6 +1024,7 @@
     const position = bodyPosition(body);
     const approachAngle = Math.atan2(state.player.y-position.y,state.player.x-position.x);
     state.mode = 'planet';
+    playOrbitTheme(true);
     state.planet = body;
     Object.assign(state.planetShip,{
       x:Math.cos(approachAngle)*210,
@@ -985,6 +1048,7 @@
     const position = bodyPosition(body);
     const exitAngle = Math.atan2(state.planetShip.y,state.planetShip.x);
     state.mode = 'system';
+    stopOrbitTheme();
     Object.assign(state.player,{
       x:position.x+Math.cos(exitAngle)*Math.max(24,body.radius+15),
       y:position.y+Math.sin(exitAngle)*Math.max(24,body.radius+15),
@@ -1026,6 +1090,7 @@
 
   function departStarbase(){
     state.mode='planet';
+    playOrbitTheme(true);
     Object.assign(state.planetShip,{x:EARTH_STARBASE.x+32,y:EARTH_STARBASE.y+12,vx:25,vy:9,angle:0.34});
     state.transitionLock=1.8;
     setStarbaseMenuVisible(false);
@@ -1077,13 +1142,16 @@
     state.scans = survey.scans;
     state.scanAnimation = {type:null,elapsed:0,queue:[]};
     state.surfaceNodes = survey.nodes;
+    state.planetRevealTimer = 0;
+    state.planetRevealReady = false;
     state.lander = {x:0.5,y:0.5,angle:-Math.PI/2};
     setPlanetOpsVisible(true);
+    if(planetOpsMenu) planetOpsMenu.classList.add('hidden');
     refreshPlanetOps();
     if(systemLabel) systemLabel.textContent = `${state.currentSystem} — ${state.planet.name}`;
     if(systemSubLabel) systemSubLabel.textContent = 'PLANETARY ANALYSIS';
-    if(controlsLabel) controlsLabel.textContent = 'SELECT A SCAN OR DISPATCH THE PLANET LANDER';
-    setLog('SCIENCE', `${state.planet.name} orbital survey ready. Select a scan channel.`,6);
+    if(controlsLabel) controlsLabel.textContent = 'PLANETARY ACQUISITION - STAND BY';
+    setLog('SCIENCE', `${state.planet.name} visual acquisition in progress.`,3);
   }
 
   function returnToPlanetOrbit(){
@@ -1563,15 +1631,30 @@
     const upperHeight = viewHeight*0.52;
     const cx = viewWidth*0.5;
     const cy = upperHeight*0.52;
-    const radius = Math.min(118,upperHeight*0.29,viewWidth*0.12);
+    const targetRadius = Math.min(118,upperHeight*0.29,viewWidth*0.12);
+    const revealTime=Math.min(PLANET_REVEAL_DURATION,state.planetRevealTimer);
+    const zoomProgress=Math.min(1,revealTime/.58);
+    const back=1.70158;
+    const zoomEase=1+(back+1)*Math.pow(zoomProgress-1,3)+back*Math.pow(zoomProgress-1,2);
+    const radius=targetRadius*(.035+.965*Math.max(0,zoomEase));
+    const statsProgress=Math.max(0,Math.min(1,(revealTime-.48)/.34));
+    const mapProgress=Math.max(0,Math.min(1,(revealTime-.62)/.58));
+    const mapEase=1-Math.pow(1-mapProgress,3);
     ctx.fillStyle = '#2218d0';ctx.fillRect(0,0,viewWidth,24);
     ctx.fillStyle = '#ff48e1';ctx.font = '13px Orbitron, sans-serif';ctx.textAlign='center';ctx.fillText(body.name,viewWidth/2,17);
     drawPlanetGlobe(body,cx,cy,radius);
+    if(zoomProgress<1){
+      ctx.save();ctx.globalAlpha=(1-zoomProgress)*.7;ctx.strokeStyle=body.color;ctx.lineWidth=2;ctx.beginPath();ctx.arc(cx,cy,radius+18+zoomProgress*35,0,TWO_PI);ctx.stroke();ctx.restore();
+    }
+    ctx.save();ctx.globalAlpha=statsProgress;
     ctx.font='13px "Courier New",monospace';ctx.textAlign='left';ctx.fillStyle='#765cff';
     const left=[`Orbit: ${profile.orbit}`,`Atmo: ${profile.atmo}`,`Temp: ${profile.temp}`,`Weather: ${profile.weather}`,`Tectonics: ${profile.tectonics}`];
     const right=[`Mass: ${profile.mass}`,`Radius: ${profile.radius}`,`Gravity: ${profile.gravity}`,`Day: ${profile.day}`,`Tilt: ${profile.tilt}`];
     left.forEach((text,index)=>ctx.fillText(text,28,88+index*30));
     right.forEach((text,index)=>ctx.fillText(text,viewWidth-245,88+index*30));
+    ctx.restore();
+    if(mapProgress<=0) return;
+    ctx.save();ctx.globalAlpha=mapProgress;ctx.translate(0,(1-mapEase)*72);
     const activeScan=state.scanAnimation.type;
     ctx.fillStyle=activeScan?SCAN_COLORS[activeScan]:'#8c93a3';
     ctx.font='18px Orbitron, sans-serif';ctx.textAlign='center';
@@ -1582,13 +1665,38 @@
     drawScanSweep(mapRect);
     drawScanNodes(mapRect,false);
     ctx.strokeStyle='#687684';ctx.lineWidth=2;ctx.strokeRect(mapRect.x,mapRect.y,mapRect.w,mapRect.h);
+    ctx.restore();
   }
 
   function drawLanderIcon(x,y,scale=1,angle=-Math.PI/2){
-    ctx.save();ctx.translate(x,y);ctx.rotate(angle);ctx.scale(scale,scale);
-    ctx.shadowColor='#7affff';ctx.shadowBlur=9;
-    ctx.fillStyle='#d9ffff';ctx.beginPath();ctx.moveTo(13,0);ctx.lineTo(-7,-8);ctx.lineTo(-4,-3);ctx.lineTo(-12,-3);ctx.lineTo(-12,3);ctx.lineTo(-4,3);ctx.lineTo(-7,8);ctx.closePath();ctx.fill();
-    ctx.fillStyle='#ff8b31';ctx.fillRect(-15,-3,7,6);ctx.restore();
+    const size=62*scale;
+    ctx.save();ctx.translate(x,y);ctx.rotate(angle+Math.PI/2);
+    const moving=keys.thrust||keys.reverse||keys.left||keys.right||state.mode==='takeoff';
+    if(moving){
+      const flame=ctx.createLinearGradient(-size*.72,0,-size*.19,0);
+      flame.addColorStop(0,'rgba(31,139,255,0)');flame.addColorStop(.65,'rgba(34,169,255,.55)');flame.addColorStop(1,'rgba(213,252,255,.94)');
+      ctx.fillStyle=flame;ctx.shadowColor='#31b9ff';ctx.shadowBlur=11;
+      ctx.beginPath();ctx.moveTo(-size*.7,-size*.09);ctx.lineTo(-size*.19,-size*.15);ctx.lineTo(-size*.19,size*.15);ctx.lineTo(-size*.7,size*.09);ctx.closePath();ctx.fill();
+    }
+    if(planetLanderSprite.complete&&planetLanderSprite.naturalWidth){
+      ctx.shadowColor='#50dfff';ctx.shadowBlur=8;ctx.drawImage(planetLanderSprite,-size/2,-size/2,size,size);
+    }else{
+      ctx.rotate(-Math.PI/2);ctx.shadowColor='#7affff';ctx.shadowBlur=9;ctx.fillStyle='#d9ffff';ctx.beginPath();ctx.moveTo(13,0);ctx.lineTo(-7,-8);ctx.lineTo(-4,-3);ctx.lineTo(-12,-3);ctx.lineTo(-12,3);ctx.lineTo(-4,3);ctx.lineTo(-7,8);ctx.closePath();ctx.fill();
+    }
+    ctx.restore();
+  }
+
+  function drawDescendingLander(x,y,scale=1){
+    const size=170*scale;
+    ctx.save();
+    const trail=ctx.createLinearGradient(x+size*.58,y+size*.58,x+size*.12,y+size*.12);
+    trail.addColorStop(0,'rgba(29,126,255,0)');trail.addColorStop(.65,'rgba(27,156,255,.34)');trail.addColorStop(1,'rgba(214,251,255,.9)');
+    ctx.strokeStyle=trail;ctx.lineWidth=Math.max(3,size*.08);ctx.lineCap='round';ctx.shadowColor='#20aaff';ctx.shadowBlur=18;
+    ctx.beginPath();ctx.moveTo(x+size*.62,y+size*.6);ctx.lineTo(x+size*.18,y+size*.18);ctx.stroke();
+    if(descendingLanderSprite.complete&&descendingLanderSprite.naturalWidth){
+      ctx.shadowColor='#4ad9ff';ctx.shadowBlur=14;ctx.drawImage(descendingLanderSprite,x-size/2,y-size/2,size,size);
+    }else drawLanderIcon(x,y,scale,-2.35);
+    ctx.restore();
   }
 
   function drawSurfaceContacts(rect,terrain,sx,sy,cropW,cropH){
@@ -1622,11 +1730,11 @@
   function drawLanding(){
     drawPlanetDetail();
     const t = state.landingTimer;
-    const progress = Math.min(1,t/2.15);
+    const progress = Math.min(1,t/2.25);
     const eased = 1-Math.pow(1-progress,3);
     const startX=viewWidth*0.88,startY=viewHeight*0.82,endX=viewWidth*0.52,endY=viewHeight*0.27;
-    drawLanderIcon(startX+(endX-startX)*eased,startY+(endY-startY)*eased,1.25-eased*0.65,-2.1);
-    if(t>1.65){ctx.fillStyle=`rgba(0,0,0,${Math.min(1,(t-1.65)/0.85)})`;ctx.fillRect(0,0,viewWidth,viewHeight);}
+    drawDescendingLander(startX+(endX-startX)*eased,startY+(endY-startY)*eased,.82-eased*.48);
+    if(t>1.72){ctx.fillStyle=`rgba(0,0,0,${Math.min(1,(t-1.72)/.9)})`;ctx.fillRect(0,0,viewWidth,viewHeight);}
   }
 
   function drawSurface(){
@@ -2051,7 +2159,7 @@
     start: startSystemGame,
     finishIntro,
     leave: leaveStory,
-    getState:()=>({mode:state.mode,currentSystem:state.currentSystem,planet:state.planet&&state.planet.name,missionStage:state.missionStage,fuel:state.fuel,maxFuel:state.maxFuel,fuelRange:fuelRange(),shipAngle:activeShip().angle,autopilotTarget:state.autopilotTarget&&{...state.autopilotTarget},scans:{...state.scans},scanType:state.scanAnimation.type,mineralCargo:JSON.parse(JSON.stringify(state.mineralCargo)),cargoTradeValue:state.cargoTradeValue,credits:state.credits,constructedShips:state.constructedShips.map(ship=>({...ship})),installedModules:[...state.installedModules],upgrades:{...state.upgrades},landerAngle:state.lander.angle,remainingMinerals:state.surfaceNodes.filter(node=>node.type==='mineral'&&!node.collected).length,active:storyActive,intro:introRunning}),
+    getState:()=>({mode:state.mode,currentSystem:state.currentSystem,planet:state.planet&&state.planet.name,missionStage:state.missionStage,fuel:state.fuel,maxFuel:state.maxFuel,fuelRange:fuelRange(),shipAngle:activeShip().angle,planetReveal:state.planetRevealTimer,planetRevealReady:state.planetRevealReady,orbitTheme:activeOrbitThemeIndex+1,autopilotTarget:state.autopilotTarget&&{...state.autopilotTarget},scans:{...state.scans},scanType:state.scanAnimation.type,mineralCargo:JSON.parse(JSON.stringify(state.mineralCargo)),cargoTradeValue:state.cargoTradeValue,credits:state.credits,constructedShips:state.constructedShips.map(ship=>({...ship})),installedModules:[...state.installedModules],upgrades:{...state.upgrades},landerAngle:state.lander.angle,remainingMinerals:state.surfaceNodes.filter(node=>node.type==='mineral'&&!node.collected).length,active:storyActive,intro:introRunning}),
     setPlayer:(x,y)=>{ const ship=activeShip(); ship.x=x; ship.y=y; ship.vx=0; ship.vy=0; },
     enterPlanet:(name)=>{ const body=bodies.find(item=>item.name===String(name).toUpperCase()); if(body) enterPlanetSystem(body); },
     openPlanet:(name)=>{ const body=bodies.find(item=>item.name===String(name).toUpperCase()); if(body){enterPlanetSystem(body);enterPlanetDetail();} },
