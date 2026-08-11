@@ -1024,7 +1024,6 @@
     const position = bodyPosition(body);
     const approachAngle = Math.atan2(state.player.y-position.y,state.player.x-position.x);
     state.mode = 'planet';
-    playOrbitTheme(true);
     state.planet = body;
     Object.assign(state.planetShip,{
       x:Math.cos(approachAngle)*210,
@@ -1090,7 +1089,6 @@
 
   function departStarbase(){
     state.mode='planet';
-    playOrbitTheme(true);
     Object.assign(state.planetShip,{x:EARTH_STARBASE.x+32,y:EARTH_STARBASE.y+12,vx:25,vy:9,angle:0.34});
     state.transitionLock=1.8;
     setStarbaseMenuVisible(false);
@@ -1132,6 +1130,7 @@
   function enterPlanetDetail(){
     if(!state.planet) return;
     state.mode = 'planetDetail';
+    playOrbitTheme(true);
     if(!state.planetSurveys[state.planet.name]){
       state.planetSurveys[state.planet.name]={
         scans:{mineral:false,biological:false,energy:false},
@@ -1157,6 +1156,7 @@
   function returnToPlanetOrbit(){
     if(!state.planet) return;
     state.mode = 'planet';
+    stopOrbitTheme();
     Object.assign(state.planetShip,{x:0,y:82,vx:0,vy:24,angle:Math.PI/2});
     state.transitionLock = 1.8;
     setPlanetOpsVisible(false);
@@ -2159,7 +2159,7 @@
     start: startSystemGame,
     finishIntro,
     leave: leaveStory,
-    getState:()=>({mode:state.mode,currentSystem:state.currentSystem,planet:state.planet&&state.planet.name,missionStage:state.missionStage,fuel:state.fuel,maxFuel:state.maxFuel,fuelRange:fuelRange(),shipAngle:activeShip().angle,planetReveal:state.planetRevealTimer,planetRevealReady:state.planetRevealReady,orbitTheme:activeOrbitThemeIndex+1,autopilotTarget:state.autopilotTarget&&{...state.autopilotTarget},scans:{...state.scans},scanType:state.scanAnimation.type,mineralCargo:JSON.parse(JSON.stringify(state.mineralCargo)),cargoTradeValue:state.cargoTradeValue,credits:state.credits,constructedShips:state.constructedShips.map(ship=>({...ship})),installedModules:[...state.installedModules],upgrades:{...state.upgrades},landerAngle:state.lander.angle,remainingMinerals:state.surfaceNodes.filter(node=>node.type==='mineral'&&!node.collected).length,active:storyActive,intro:introRunning}),
+    getState:()=>({mode:state.mode,currentSystem:state.currentSystem,planet:state.planet&&state.planet.name,missionStage:state.missionStage,fuel:state.fuel,maxFuel:state.maxFuel,fuelRange:fuelRange(),shipAngle:activeShip().angle,planetReveal:state.planetRevealTimer,planetRevealReady:state.planetRevealReady,orbitTheme:activeOrbitThemeIndex+1,orbitThemeActive:!!activeOrbitTheme,autopilotTarget:state.autopilotTarget&&{...state.autopilotTarget},scans:{...state.scans},scanType:state.scanAnimation.type,mineralCargo:JSON.parse(JSON.stringify(state.mineralCargo)),cargoTradeValue:state.cargoTradeValue,credits:state.credits,constructedShips:state.constructedShips.map(ship=>({...ship})),installedModules:[...state.installedModules],upgrades:{...state.upgrades},landerAngle:state.lander.angle,remainingMinerals:state.surfaceNodes.filter(node=>node.type==='mineral'&&!node.collected).length,active:storyActive,intro:introRunning}),
     setPlayer:(x,y)=>{ const ship=activeShip(); ship.x=x; ship.y=y; ship.vx=0; ship.vy=0; },
     enterPlanet:(name)=>{ const body=bodies.find(item=>item.name===String(name).toUpperCase()); if(body) enterPlanetSystem(body); },
     openPlanet:(name)=>{ const body=bodies.find(item=>item.name===String(name).toUpperCase()); if(body){enterPlanetSystem(body);enterPlanetDetail();} },
