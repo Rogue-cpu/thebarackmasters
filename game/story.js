@@ -66,6 +66,8 @@
   const PLANET_TILT = 0.56;
   const EARTH_STARBASE = {x:142,y:-58,radius:18};
   const PLANET_SCAN_DURATION = 2.8;
+  const HYPER_FUEL_PER_UNIT = 0.12;
+  const STARMAP_BOUNDS = {left:-850,right:850,top:-600,bottom:600};
   const SCAN_COLORS = {mineral:'#ff3624',energy:'#b84dff',biological:'#3dff62'};
   const SCAN_RGB = {mineral:'255,54,36',energy:'184,77,255',biological:'61,255,98'};
   const MAX_ESCORTS = 12;
@@ -111,11 +113,41 @@
   const lostShip = {x:548, y:-302, name:'PIONEER ONE'};
   const hyperspaceStars = [
     {name:'SOL', x:0, y:0, color:'#ffe06b', size:12, available:true},
-    {name:'ALPHA CENTAURI', x:-430, y:-255, color:'#ffb15c', size:10, available:false},
-    {name:'SIRIUS', x:520, y:310, color:'#b7d8ff', size:11, available:false},
-    {name:'EPSILON ERIDANI', x:610, y:-420, color:'#ff755e', size:8, available:false},
-    {name:'TAU CETI', x:-650, y:390, color:'#fff0a1', size:8, available:false}
+    {name:'ALPHA CENTAURI', x:-430, y:-255, color:'#ffb15c', size:10, available:true},
+    {name:'SIRIUS', x:520, y:310, color:'#b7d8ff', size:11, available:true},
+    {name:'EPSILON ERIDANI', x:610, y:-420, color:'#ff755e', size:8, available:true},
+    {name:'TAU CETI', x:-650, y:390, color:'#fff0a1', size:8, available:true}
   ];
+  const extraSystemBodies = {
+    'ALPHA CENTAURI':[
+      {name:'PROXIMA I',orbit:118,radius:6,color:'#b94c32',speed:0.27,phase:1.2,moons:[]},
+      {name:'CHIRON',orbit:225,radius:9,color:'#5490bc',speed:0.15,phase:4.1,moons:[{name:'CHIRON MOON',color:'#aab2b5'}]},
+      {name:'HELIOS',orbit:382,radius:13,color:'#c49757',speed:0.08,phase:2.7,rings:true,moons:[]}
+    ],
+    'SIRIUS':[
+      {name:'SIRIUS I',orbit:102,radius:5,color:'#9d7a60',speed:0.31,phase:3.5,moons:[]},
+      {name:'PELAGOS',orbit:206,radius:10,color:'#3378c8',speed:0.16,phase:0.8,moons:[{name:'NEREA',color:'#c0c6ca'}]},
+      {name:'SIRIUS III',orbit:348,radius:12,color:'#755b92',speed:0.09,phase:5.2,moons:[]}
+    ],
+    'EPSILON ERIDANI':[
+      {name:'ERIDANI I',orbit:135,radius:7,color:'#d16a3f',speed:0.24,phase:2.1,moons:[]},
+      {name:'VERDANT',orbit:268,radius:9,color:'#55a36d',speed:0.13,phase:4.8,moons:[{name:'SEED',color:'#9aa59d'}]}
+    ],
+    'TAU CETI':[
+      {name:'CETI I',orbit:92,radius:4,color:'#b0a58d',speed:0.33,phase:0.4,moons:[]},
+      {name:'OCEANA',orbit:188,radius:9,color:'#287cb3',speed:0.18,phase:3.3,moons:[{name:'TIDE',color:'#d0d2cc'}]},
+      {name:'CETI III',orbit:318,radius:11,color:'#b07048',speed:0.10,phase:5.7,rings:true,moons:[]}
+    ]
+  };
+  Object.values(extraSystemBodies).flat().forEach((body,index)=>{
+    if(planetProfiles[body.name]) return;
+    const landable=body.radius<12;
+    planetProfiles[body.name]={
+      orbit:`${(body.orbit/184).toFixed(2)} AU`,atmo:landable?'0.74 ATM':'>100 ATM',temp:`${-90+(index*37)%210}° C`,weather:`CLASS ${1+index%7}`,tectonics:`CLASS ${1+index%5}`,
+      mass:`${(body.radius/8).toFixed(2)} E.S.`,radius:`${(body.radius/8).toFixed(2)} E.S.`,gravity:`${Math.max(.18,body.radius/10).toFixed(2)} G`,day:`${(.7+(index%8)*.31).toFixed(2)} DAYS`,tilt:`${3+(index*11)%48}°`,landable,
+      palette:[body.color,'#234b52','#729069','#c2b886','#d6d5c4'],counts:{mineral:5+index%5,biological:landable?index%6:0,energy:1+index%3}
+    };
+  });
 
   let introRunning = false;
   let introFinishing = false;
@@ -135,6 +167,11 @@
 
   const state = {
     mode:'system',
+    currentSystem:'SOL',
+    starmapReturnMode:'system',
+    starmapSelection:null,
+    autopilotTarget:null,
+    autopilotFuelWarning:false,
     elapsed:0,
     day:1,
     fuel:100,
@@ -496,6 +533,11 @@
 
   function resetStory(){
     state.mode = 'system';
+    state.currentSystem = 'SOL';
+    state.starmapReturnMode = 'system';
+    state.starmapSelection = null;
+    state.autopilotTarget = null;
+    state.autopilotFuelWarning = false;
     state.elapsed = 0;
     state.day = 1;
     state.fuel = 100;
@@ -530,6 +572,8 @@
     Object.assign(state.planetShip, {x:0,y:205,vx:0,vy:-18,angle:-Math.PI/2});
     if(missionTitle) missionTitle.textContent = 'THE SILENT PIONEER';
     if(missionText) missionText.textContent = "Travel to the unidentified signal and investigate humanity's missing first spacecraft.";
+    if(systemLabel) systemLabel.textContent='SOL SYSTEM';
+    if(systemSubLabel) systemSubLabel.textContent='LOCAL SPACE';
     setLog('COMMAND', 'Vanguard I, find out why our first ship never came home.', 8);
     setPlanetOpsVisible(false);
     stopShipyardTheme();
@@ -649,8 +693,17 @@
 
   function activeShip(){
     if(state.mode === 'hyperspace') return state.hyper;
+    if(state.mode === 'starmap'&&state.starmapReturnMode==='hyperspace') return state.hyper;
     if(state.mode === 'planet') return state.planetShip;
     return state.player;
+  }
+
+  function currentStar(){
+    return hyperspaceStars.find(star=>star.name===state.currentSystem)||hyperspaceStars[0];
+  }
+
+  function currentBodies(){
+    return state.currentSystem==='SOL'?bodies:(extraSystemBodies[state.currentSystem]||[]);
   }
 
   function bodyPosition(body){
@@ -669,8 +722,10 @@
       const acceleration = (hyper ? 76 : 64)*thrustMultiplier;
       ship.vx += Math.cos(ship.angle) * acceleration * drive * dt;
       ship.vy += Math.sin(ship.angle) * acceleration * drive * dt;
-      const efficiency=Math.max(0.55,1-state.upgrades.dynamos*0.08);
-      state.fuel = Math.max(0, state.fuel - Math.abs(drive) * dt * 0.34*efficiency);
+      if(!hyper){
+        const efficiency=Math.max(0.55,1-state.upgrades.dynamos*0.08);
+        state.fuel = Math.max(0, state.fuel - Math.abs(drive) * dt * 0.34*efficiency);
+      }
     }
     const maxSpeed = (hyper ? 118 : 92)*thrustMultiplier;
     const speed = Math.hypot(ship.vx, ship.vy);
@@ -680,9 +735,107 @@
     ship.vy *= drag;
     ship.x += ship.vx * dt;
     ship.y += ship.vy * dt;
+    if(hyper&&speed>0.1){
+      const efficiency=Math.max(0.55,1-state.upgrades.dynamos*0.08);
+      state.fuel=Math.max(0,state.fuel-speed*dt*HYPER_FUEL_PER_UNIT*efficiency);
+    }
     if(manual && systemSubLabel){
       systemSubLabel.textContent = hyper ? 'HYPERSPACE' : (state.mode === 'planet' ? 'PLANETARY LOCAL SPACE' : 'LOCAL SPACE');
     }
+  }
+
+  function normalizeAngle(angle){
+    while(angle>Math.PI) angle-=TWO_PI;
+    while(angle<-Math.PI) angle+=TWO_PI;
+    return angle;
+  }
+
+  function updateHyperspaceShip(dt){
+    const manual=keys.thrust||keys.reverse||keys.left||keys.right;
+    if(manual&&state.autopilotTarget){
+      state.autopilotTarget=null;
+      setLog('AUTOPILOT','Manual controls engaged. Autopilot course cancelled.',3);
+    }
+    const target=state.autopilotTarget;
+    if(target&&!manual){
+      const dx=target.x-state.hyper.x,dy=target.y-state.hyper.y;
+      const distance=Math.hypot(dx,dy);
+      const desired=Math.atan2(dy,dx);
+      const delta=normalizeAngle(desired-state.hyper.angle);
+      state.hyper.angle+=Math.max(-2.1*dt,Math.min(2.1*dt,delta));
+      if(state.fuel>0&&distance>22&&Math.abs(delta)<0.72){
+        const thrust=76*(1+state.upgrades.thrusters*0.1);
+        state.hyper.vx+=Math.cos(state.hyper.angle)*thrust*dt;
+        state.hyper.vy+=Math.sin(state.hyper.angle)*thrust*dt;
+      }else if(state.fuel<=0&&!state.autopilotFuelWarning){
+        state.autopilotFuelWarning=true;
+        setLog('AUTOPILOT','Fuel exhausted. Vanguard I is drifting in hyperspace.',7);
+      }
+    }
+    updateShip(state.hyper,dt,true);
+  }
+
+  function starmapPosition(){
+    if(state.starmapReturnMode==='hyperspace') return {x:state.hyper.x,y:state.hyper.y};
+    const star=currentStar();return {x:star.x,y:star.y};
+  }
+
+  function fuelRange(){
+    const efficiency=Math.max(0.55,1-state.upgrades.dynamos*0.08);
+    return state.fuel/(HYPER_FUEL_PER_UNIT*efficiency);
+  }
+
+  function starmapTransform(){
+    const width=STARMAP_BOUNDS.right-STARMAP_BOUNDS.left;
+    const height=STARMAP_BOUNDS.bottom-STARMAP_BOUNDS.top;
+    const scale=Math.min((viewWidth-72)/width,(viewHeight-82)/height);
+    return {scale,cx:viewWidth/2-(STARMAP_BOUNDS.left+STARMAP_BOUNDS.right)*scale/2,cy:viewHeight/2-(STARMAP_BOUNDS.top+STARMAP_BOUNDS.bottom)*scale/2};
+  }
+
+  function openStarmap(){
+    if(state.mode==='starmap') return;
+    if(!['system','hyperspace'].includes(state.mode)){
+      setLog('STARMAP','Return to stellar or hyperspace navigation before opening the starmap.',4);
+      return;
+    }
+    state.starmapReturnMode=state.mode;
+    state.mode='starmap';clearKeys();
+    if(interaction) interaction.classList.add('hidden');
+    if(systemLabel) systemLabel.textContent='STARMAP';
+    if(systemSubLabel) systemSubLabel.textContent='HYPERSPACE NAVIGATION';
+    if(controlsLabel) controlsLabel.textContent='CLICK AN IN-RANGE STAR TO PLOT COURSE    ESC CLOSE STARMAP';
+  }
+
+  function closeStarmap(){
+    if(state.mode!=='starmap') return;
+    state.mode=state.starmapReturnMode||'hyperspace';
+    if(state.mode==='hyperspace'){
+      if(systemLabel) systemLabel.textContent='HYPERSPACE';
+      if(systemSubLabel) systemSubLabel.textContent='INTERSTELLAR NAVIGATION';
+    }else{
+      if(systemLabel) systemLabel.textContent=`${state.currentSystem} SYSTEM`;
+      if(systemSubLabel) systemSubLabel.textContent='LOCAL SPACE';
+    }
+  }
+
+  function plotStarmapCourse(star){
+    const position=starmapPosition();
+    const distance=Math.hypot(star.x-position.x,star.y-position.y);
+    const cost=distance*HYPER_FUEL_PER_UNIT*Math.max(0.55,1-state.upgrades.dynamos*0.08);
+    state.starmapSelection=star.name;
+    if(state.starmapReturnMode!=='hyperspace'&&star.name===state.currentSystem){
+      setLog('STARMAP',`${star.name} is the current system. Select a different destination.`,4);
+      return false;
+    }
+    if(distance>fuelRange()+0.01){
+      setLog('STARMAP',`${star.name} is outside safe fuel range. Required: ${Math.ceil(cost)}. Available: ${Math.floor(state.fuel)}.`,6);
+      return false;
+    }
+    state.autopilotTarget={name:star.name,x:star.x,y:star.y};
+    state.autopilotFuelWarning=false;
+    setLog('AUTOPILOT',`Course plotted for ${star.name}. Range ${Math.round(distance)} HS; projected fuel ${Math.ceil(cost)}.`,7);
+    closeStarmap();
+    return true;
   }
 
   function update(dt){
@@ -696,9 +849,10 @@
     if(state.mode === 'system'){
       updateShip(state.player, dt, false);
       const range = Math.hypot(state.player.x-lostShip.x, state.player.y-lostShip.y);
-      if(state.missionStage === 0 && interaction) interaction.classList.toggle('hidden', range > 42);
+      if(state.currentSystem==='SOL'&&state.missionStage === 0 && interaction) interaction.classList.toggle('hidden', range > 42);
+      else if(interaction) interaction.classList.add('hidden');
       if(state.transitionLock <= 0){
-        const nearbyPlanet = bodies.find(body=>{
+        const nearbyPlanet = currentBodies().find(body=>{
           const position = bodyPosition(body);
           return Math.hypot(state.player.x-position.x,state.player.y-position.y) < Math.max(15,body.radius+9);
         });
@@ -726,10 +880,12 @@
       state.surfaceFade = Math.max(0,state.surfaceFade-dt*0.85);
     }else if(state.mode === 'takeoff'){
       updateLanderTakeoff(dt);
+    }else if(state.mode==='starmap'){
+      if(interaction) interaction.classList.add('hidden');
     }else if(state.mode === 'starbase'||state.mode==='shipyard'||state.mode==='outfit'){
       if(interaction) interaction.classList.add('hidden');
     }else{
-      updateShip(state.hyper, dt, true);
+      updateHyperspaceShip(dt);
       if(interaction) interaction.classList.add('hidden');
       if(state.transitionLock <= 0){
         const nearby = hyperspaceStars.find(star=>Math.hypot(state.hyper.x-star.x,state.hyper.y-star.y)<24);
@@ -761,7 +917,7 @@
     });
     state.transitionLock = 1.8;
     setPlanetOpsVisible(false);
-    if(systemLabel) systemLabel.textContent = `SOL — ${body.name}`;
+    if(systemLabel) systemLabel.textContent = `${state.currentSystem} — ${body.name}`;
     if(systemSubLabel) systemSubLabel.textContent = 'PLANETARY LOCAL SPACE';
     if(controlsLabel) controlsLabel.innerHTML = 'W / ↑ THRUST&nbsp;&nbsp; A D / ← → TURN&nbsp;&nbsp; FLY CLOSE TO ANALYZE';
     const moonCount = body.moons.length;
@@ -784,7 +940,7 @@
     state.planet = null;
     setPlanetOpsVisible(false);
     state.transitionLock = 1.8;
-    if(systemLabel) systemLabel.textContent = 'SOL SYSTEM';
+    if(systemLabel) systemLabel.textContent = `${state.currentSystem} SYSTEM`;
     if(systemSubLabel) systemSubLabel.textContent = 'LOCAL SPACE';
     setLog('NAVIGATION', `Leaving ${body.name} local space.`,4);
   }
@@ -869,7 +1025,7 @@
     state.lander = {x:0.5,y:0.5,angle:-Math.PI/2};
     setPlanetOpsVisible(true);
     refreshPlanetOps();
-    if(systemLabel) systemLabel.textContent = `SOL — ${state.planet.name}`;
+    if(systemLabel) systemLabel.textContent = `${state.currentSystem} — ${state.planet.name}`;
     if(systemSubLabel) systemSubLabel.textContent = 'PLANETARY ANALYSIS';
     if(controlsLabel) controlsLabel.textContent = 'SELECT A SCAN OR DISPATCH THE PLANET LANDER';
     setLog('SCIENCE', `${state.planet.name} orbital survey ready. Select a scan channel.`,6);
@@ -981,10 +1137,13 @@
   }
 
   function enterHyperspace(){
-    const angle = Math.atan2(state.player.y,state.player.x);
+    const origin=currentStar();
+    const angle=state.autopilotTarget
+      ?Math.atan2(state.autopilotTarget.y-origin.y,state.autopilotTarget.x-origin.x)
+      :Math.atan2(state.player.y,state.player.x);
     state.mode = 'hyperspace';
     Object.assign(state.hyper, {
-      x:Math.cos(angle)*48, y:Math.sin(angle)*48,
+      x:origin.x+Math.cos(angle)*48, y:origin.y+Math.sin(angle)*48,
       vx:Math.cos(angle)*42, vy:Math.sin(angle)*42, angle:state.player.angle
     });
     state.transitionLock = 2.2;
@@ -992,27 +1151,30 @@
     if(systemLabel) systemLabel.textContent = 'HYPERSPACE';
     if(systemSubLabel) systemSubLabel.textContent = 'INTERSTELLAR NAVIGATION';
     if(controlsLabel) controlsLabel.innerHTML = 'W / ↑ THRUST&nbsp;&nbsp; A D / ← → TURN&nbsp;&nbsp; APPROACH A STAR TO ENTER';
-    setLog('NAVIGATION', 'Hyperspace transition complete. Sol remains behind us on the starmap.', 6);
+    setLog('NAVIGATION', `Hyperspace transition complete. ${state.currentSystem} remains behind us on the starmap.`, 6);
   }
 
   function enterSolarSystem(name){
-    if(name !== 'SOL') return;
-    const angle = Math.atan2(state.hyper.y,state.hyper.x) + Math.PI;
+    const destination=hyperspaceStars.find(star=>star.name===name);
+    if(!destination||!destination.available) return;
+    const angle = Math.atan2(state.hyper.y-destination.y,state.hyper.x-destination.x) + Math.PI;
     state.mode = 'system';
+    state.currentSystem=name;
+    state.autopilotTarget=null;
     Object.assign(state.player, {
       x:Math.cos(angle)*720, y:Math.sin(angle)*720,
       vx:Math.cos(angle)*-18, vy:Math.sin(angle)*-18, angle:angle+Math.PI
     });
     state.transitionLock = 2.2;
     setPlanetOpsVisible(false);
-    if(systemLabel) systemLabel.textContent = 'SOL SYSTEM';
+    if(systemLabel) systemLabel.textContent = `${name} SYSTEM`;
     if(systemSubLabel) systemSubLabel.textContent = 'LOCAL SPACE';
     if(controlsLabel) controlsLabel.innerHTML = 'W / ↑ THRUST&nbsp;&nbsp; A D / ← → TURN&nbsp;&nbsp; E INTERACT&nbsp;&nbsp; ESC MENU';
-    setLog('NAVIGATION', 'Now entering the Sol system.', 5);
+    setLog('NAVIGATION', `Now entering the ${name} system. ${currentBodies().length} planetary bodies charted.`, 5);
   }
 
   function investigate(){
-    if(!storyActive || state.mode !== 'system' || state.missionStage !== 0) return;
+    if(!storyActive || state.mode !== 'system' || state.currentSystem!=='SOL' || state.missionStage !== 0) return;
     const range = Math.hypot(state.player.x-lostShip.x, state.player.y-lostShip.y);
     if(range > 42) return;
     state.missionStage = 1;
@@ -1030,6 +1192,11 @@
     if(fuelLabel) fuelLabel.textContent = `${Math.ceil(state.fuel)}/${state.maxFuel}`;
     if(dayLabel) dayLabel.textContent = String(state.day).padStart(3,'0');
     if(!distanceLabel) return;
+    if(state.mode==='starmap'){
+      if(distanceTitle) distanceTitle.textContent='FUEL RANGE';
+      distanceLabel.textContent=`${Math.floor(fuelRange())} HS`;
+      return;
+    }
     if(state.mode==='starbase'||state.mode==='shipyard'||state.mode==='outfit'){
       if(distanceTitle) distanceTitle.textContent='CREDITS';
       distanceLabel.textContent=String(state.credits);
@@ -1046,7 +1213,7 @@
     if(distanceTitle) distanceTitle.textContent = state.mode === 'hyperspace' ? 'NAV RANGE' : 'SIGNAL RANGE';
     if(state.missionStage === 0){
       distanceLabel.textContent = state.mode === 'system'
-        ? `${Math.round(Math.hypot(state.player.x-lostShip.x,state.player.y-lostShip.y))} AU`
+        ? (state.currentSystem==='SOL'?`${Math.round(Math.hypot(state.player.x-lostShip.x,state.player.y-lostShip.y))} AU`:state.currentSystem)
         : 'RETURN TO SOL';
     }else{
       distanceLabel.textContent = state.mode === 'hyperspace'
@@ -1084,10 +1251,12 @@
   function drawSystem(){
     drawBackdrop(false);
     const tr = worldTransform();
+    const systemPlanets=currentBodies();
+    const star=currentStar();
     ctx.save();
     ctx.translate(tr.cx,tr.cy);
     ctx.scale(tr.scale,tr.scale*tr.tilt);
-    bodies.forEach(body=>{
+    systemPlanets.forEach(body=>{
       ctx.strokeStyle = 'rgba(32,75,220,0.38)';
       ctx.lineWidth = 1/tr.scale;
       ctx.setLineDash([2/tr.scale,5/tr.scale]);
@@ -1097,12 +1266,12 @@
     ctx.save();
     ctx.scale(1,1/tr.tilt);
     const solarGlow = ctx.createRadialGradient(0,0,0,0,0,48);
-    solarGlow.addColorStop(0,'#fffbd0'); solarGlow.addColorStop(0.16,'#ffd83b'); solarGlow.addColorStop(0.42,'rgba(255,106,20,0.75)'); solarGlow.addColorStop(1,'rgba(255,90,0,0)');
+    solarGlow.addColorStop(0,'#fff'); solarGlow.addColorStop(0.16,star.color); solarGlow.addColorStop(0.42,`${star.color}bb`); solarGlow.addColorStop(1,'rgba(255,90,0,0)');
     ctx.fillStyle = solarGlow; ctx.beginPath(); ctx.arc(0,0,48,0,TWO_PI); ctx.fill();
     ctx.fillStyle = '#fff5a0'; ctx.beginPath(); ctx.arc(0,0,10,0,TWO_PI); ctx.fill();
     ctx.restore();
-    bodies.forEach(body=> drawPlanet(body,tr.scale,tr.tilt));
-    drawLostShip(tr.scale,tr.tilt);
+    systemPlanets.forEach(body=> drawPlanet(body,tr.scale,tr.tilt));
+    if(state.currentSystem==='SOL') drawLostShip(tr.scale,tr.tilt);
     drawPlayer(state.player,tr.scale,'#7ff7ff',tr.tilt);
     ctx.restore();
     drawEdgeGuide(tr);
@@ -1512,12 +1681,72 @@
       ctx.fillStyle = '#ffb4a0'; ctx.beginPath(); ctx.arc(x,y,star.size*0.42,0,TWO_PI); ctx.fill();
       ctx.fillStyle = '#ff8a7a'; ctx.font = '9px Orbitron, sans-serif'; ctx.textAlign = 'center'; ctx.fillText(star.name,x,y+star.size*3.2+12);
     });
+    if(state.autopilotTarget){
+      const target=state.autopilotTarget;
+      const tx=cx+(target.x-ship.x)*scale,ty=cy+(target.y-ship.y)*scale;
+      ctx.save();ctx.strokeStyle='rgba(106,242,255,.72)';ctx.lineWidth=1.5;ctx.setLineDash([7,7]);
+      ctx.beginPath();ctx.moveTo(cx,cy);ctx.lineTo(tx,ty);ctx.stroke();ctx.setLineDash([]);
+      ctx.fillStyle='#8ff8ff';ctx.font='10px Orbitron, sans-serif';ctx.textAlign='center';ctx.fillText(`AUTOPILOT: ${target.name}`,cx,24);ctx.restore();
+    }
     drawPlayer({x:cx,y:cy,angle:ship.angle},scale,'#ff5b45');
+  }
+
+  function drawStarmap(){
+    ctx.fillStyle='#01030a';ctx.fillRect(0,0,viewWidth,viewHeight);
+    const tr=starmapTransform();
+    const position=starmapPosition();
+    const range=fuelRange();
+    ctx.save();
+    ctx.strokeStyle='rgba(25,55,155,.48)';ctx.lineWidth=1;
+    for(let x=Math.ceil(STARMAP_BOUNDS.left/100)*100;x<=STARMAP_BOUNDS.right;x+=100){
+      const sx=tr.cx+x*tr.scale;ctx.beginPath();ctx.moveTo(sx,32);ctx.lineTo(sx,viewHeight-30);ctx.stroke();
+    }
+    for(let y=Math.ceil(STARMAP_BOUNDS.top/100)*100;y<=STARMAP_BOUNDS.bottom;y+=100){
+      const sy=tr.cy+y*tr.scale;ctx.beginPath();ctx.moveTo(28,sy);ctx.lineTo(viewWidth-28,sy);ctx.stroke();
+    }
+    const px=tr.cx+position.x*tr.scale,py=tr.cy+position.y*tr.scale;
+    ctx.fillStyle='rgba(72,225,255,.075)';ctx.strokeStyle='rgba(92,238,255,.58)';ctx.lineWidth=2;ctx.setLineDash([8,7]);
+    ctx.beginPath();ctx.arc(px,py,range*tr.scale,0,TWO_PI);ctx.fill();ctx.stroke();ctx.setLineDash([]);
+    hyperspaceStars.forEach(star=>{
+      const sx=tr.cx+star.x*tr.scale,sy=tr.cy+star.y*tr.scale;
+      const distance=Math.hypot(star.x-position.x,star.y-position.y);
+      const reachable=distance<=range+0.01;
+      const selected=state.starmapSelection===star.name||state.autopilotTarget&&state.autopilotTarget.name===star.name;
+      const pulse=1+Math.sin(state.elapsed*4+star.x)*.16;
+      ctx.save();ctx.globalAlpha=reachable?1:.28;
+      if(selected){ctx.strokeStyle='#fff';ctx.lineWidth=2;ctx.beginPath();ctx.arc(sx,sy,star.size*1.8+7,0,TWO_PI);ctx.stroke();}
+      const glow=ctx.createRadialGradient(sx,sy,0,sx,sy,star.size*2.7*pulse);
+      glow.addColorStop(0,star.color);glow.addColorStop(.28,star.color);glow.addColorStop(1,'rgba(0,0,0,0)');ctx.fillStyle=glow;ctx.beginPath();ctx.arc(sx,sy,star.size*2.7*pulse,0,TWO_PI);ctx.fill();
+      ctx.fillStyle=star.color;ctx.beginPath();ctx.arc(sx,sy,Math.max(3,star.size*.48),0,TWO_PI);ctx.fill();
+      ctx.font='10px Orbitron, sans-serif';ctx.textAlign='center';ctx.fillStyle=reachable?'#aef7ff':'#69727c';ctx.fillText(star.name,sx,sy+star.size*2.2+13);
+      if(!reachable){ctx.font='8px Orbitron, sans-serif';ctx.fillText('OUT OF RANGE',sx,sy+star.size*2.2+25);}
+      ctx.restore();
+    });
+    ctx.translate(px,py);ctx.rotate(state.starmapReturnMode==='hyperspace'?state.hyper.angle:-Math.PI/2);
+    ctx.fillStyle='#fff';ctx.shadowColor='#4ff3ff';ctx.shadowBlur=12;ctx.beginPath();ctx.moveTo(10,0);ctx.lineTo(-8,-6);ctx.lineTo(-4,0);ctx.lineTo(-8,6);ctx.closePath();ctx.fill();ctx.restore();
+    ctx.fillStyle='#141ac8';ctx.fillRect(0,0,viewWidth,28);ctx.fillStyle='#ff48e1';ctx.font='bold 15px Orbitron, sans-serif';ctx.textAlign='center';ctx.fillText('HYPERSPACE STARMAP',viewWidth/2,19);
+    ctx.fillStyle='rgba(4,12,22,.88)';ctx.fillRect(18,viewHeight-52,viewWidth-36,34);ctx.strokeStyle='#2954cf';ctx.strokeRect(18,viewHeight-52,viewWidth-36,34);
+    ctx.fillStyle='#79f5ff';ctx.font='10px Orbitron, sans-serif';ctx.textAlign='left';ctx.fillText(`FUEL RANGE ${Math.floor(range)} HS`,30,viewHeight-31);
+    ctx.textAlign='right';ctx.fillText('CLICK STAR: PLOT COURSE    ESC: CLOSE',viewWidth-30,viewHeight-31);
+  }
+
+  function handleStoryCanvasClick(event){
+    if(!storyActive||state.mode!=='starmap') return;
+    const rect=canvas.getBoundingClientRect();
+    const mx=(event.clientX-rect.left)*(viewWidth/rect.width),my=(event.clientY-rect.top)*(viewHeight/rect.height);
+    const tr=starmapTransform();
+    let nearest=null,best=Infinity;
+    hyperspaceStars.forEach(star=>{
+      const distance=Math.hypot(mx-(tr.cx+star.x*tr.scale),my-(tr.cy+star.y*tr.scale));
+      if(distance<best){best=distance;nearest=star;}
+    });
+    if(nearest&&best<30) plotStarmapCourse(nearest);
   }
 
   function draw(){
     ctx.setTransform(pixelRatio,0,0,pixelRatio,0,0);
     if(state.mode === 'hyperspace') drawHyperspace();
+    else if(state.mode === 'starmap') drawStarmap();
     else if(state.mode === 'planet') drawPlanetSystem();
     else if(state.mode === 'planetDetail') drawPlanetDetail();
     else if(state.mode === 'landing') drawLanding();
@@ -1559,6 +1788,9 @@
       else if(key==='escape') returnToStarbase();
       event.preventDefault();return;
     }
+    if(key==='escape'&&state.mode==='starmap'){
+      consumeEscape(event);closeStarmap();return;
+    }
     if(key==='escape'&&state.mode==='surface'){
       consumeEscape(event);beginLanderTakeoff();return;
     }
@@ -1598,15 +1830,12 @@
   function handleComputerButton(event){
     const panel = event.currentTarget.dataset.storyPanel;
     if(panel === 'starmap'){
-      const text = state.mode === 'hyperspace'
-        ? 'Tracking five nearby stellar masses. Sol is the yellow primary.'
-        : (state.mode === 'planet' ? `Currently navigating ${state.planet.name} local space. Cross the green boundary to return to Sol.` : 'Exit the system boundary to open the hyperspace starmap.');
-      setLog('STARMAP',text,5);
+      openStarmap();
     }
-    if(panel === 'manifest') setLog('MANIFEST', 'Vanguard I — Crew: 50 — Escort vessels: 0 — Fuel reserves nominal.', 5);
+    if(panel === 'manifest') setLog('MANIFEST', `Vanguard I — Crew: 50 — Escort vessels: ${state.constructedShips.length} — Fuel: ${Math.ceil(state.fuel)}/${state.maxFuel}.`, 5);
     if(panel === 'game') setLog('GAME', 'Story progress is retained while this page remains open. Full save slots will follow.', 5);
     if(panel === 'navigate'){
-      const target = state.missionStage === 0 ? 'the Pioneer One signal' : 'Alpha Centauri via hyperspace';
+      const target = state.autopilotTarget?`${state.autopilotTarget.name} via autopilot`:(state.missionStage === 0 ? 'the Pioneer One signal' : 'Alpha Centauri via hyperspace');
       setLog('NAVIGATION', `Current mission target: ${target}.`, 5);
     }
   }
@@ -1730,6 +1959,7 @@
   if(returnBtn) returnBtn.addEventListener('click', leaveStory);
   navButtons.forEach(button=>button.addEventListener('click',handleComputerButton));
   planetOpsButtons.forEach(button=>button.addEventListener('click',handlePlanetAction));
+  canvas.addEventListener('click',handleStoryCanvasClick);
   starbaseButtons.forEach(button=>button.addEventListener('click',handleStarbaseAction));
   if(shipyardPrev) shipyardPrev.addEventListener('click',()=>cycleShipyard(-1));
   if(shipyardNext) shipyardNext.addEventListener('click',()=>cycleShipyard(1));
@@ -1749,7 +1979,7 @@
     start: startSystemGame,
     finishIntro,
     leave: leaveStory,
-    getState:()=>({mode:state.mode,planet:state.planet&&state.planet.name,missionStage:state.missionStage,fuel:state.fuel,maxFuel:state.maxFuel,scans:{...state.scans},scanType:state.scanAnimation.type,mineralCargo:JSON.parse(JSON.stringify(state.mineralCargo)),cargoTradeValue:state.cargoTradeValue,credits:state.credits,constructedShips:state.constructedShips.map(ship=>({...ship})),installedModules:[...state.installedModules],upgrades:{...state.upgrades},landerAngle:state.lander.angle,remainingMinerals:state.surfaceNodes.filter(node=>node.type==='mineral'&&!node.collected).length,active:storyActive,intro:introRunning}),
+    getState:()=>({mode:state.mode,currentSystem:state.currentSystem,planet:state.planet&&state.planet.name,missionStage:state.missionStage,fuel:state.fuel,maxFuel:state.maxFuel,fuelRange:fuelRange(),autopilotTarget:state.autopilotTarget&&{...state.autopilotTarget},scans:{...state.scans},scanType:state.scanAnimation.type,mineralCargo:JSON.parse(JSON.stringify(state.mineralCargo)),cargoTradeValue:state.cargoTradeValue,credits:state.credits,constructedShips:state.constructedShips.map(ship=>({...ship})),installedModules:[...state.installedModules],upgrades:{...state.upgrades},landerAngle:state.lander.angle,remainingMinerals:state.surfaceNodes.filter(node=>node.type==='mineral'&&!node.collected).length,active:storyActive,intro:introRunning}),
     setPlayer:(x,y)=>{ const ship=activeShip(); ship.x=x; ship.y=y; ship.vx=0; ship.vy=0; },
     enterPlanet:(name)=>{ const body=bodies.find(item=>item.name===String(name).toUpperCase()); if(body) enterPlanetSystem(body); },
     openPlanet:(name)=>{ const body=bodies.find(item=>item.name===String(name).toUpperCase()); if(body){enterPlanetSystem(body);enterPlanetDetail();} },
@@ -1768,6 +1998,10 @@
     cycleOutfit,
     cycleShipyard,
     returnToStarbase,
+    openStarmap,
+    closeStarmap,
+    plotCourse:(name)=>{const star=hyperspaceStars.find(item=>item.name===String(name).toUpperCase());return star?plotStarmapCourse(star):false;},
+    enterHyperspace,
     tradeMinerals,
     investigate
   };
