@@ -103,11 +103,11 @@
   ];
   const COMMUNICATION_CONTACTS = {
     starbaseCommander:{
-      name:'COMMANDER AMARA COLE',
+      name:'COMMANDER WALTER BRIGGS',
       title:'EARTH STARBASE COMMANDER',
       location:'EARTH STARBASE',
-      portrait:'assets/story/starbase-commander.png',
-      alt:'Commander Amara Cole aboard Earth Starbase',
+      portrait:'assets/story/starbase-commander.png?v=briggs-1',
+      alt:'Commander Walter Briggs aboard Earth Starbase',
       greeting:'welcome',
       nodes:{
         welcome:{
