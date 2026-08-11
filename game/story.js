@@ -69,6 +69,9 @@
   const PLANET_REVEAL_DURATION = 1.35;
   const HYPER_FUEL_PER_UNIT = 0.12;
   const BASE_TURN_RATE = 0.82;
+  const LANDER_MAX_CREW = 12;
+  const LANDER_STORAGE_CAPACITY = 50;
+  const LANDER_SHOT_COOLDOWN = 0.28;
   const STARMAP_BOUNDS = {left:-2050,right:1950,top:-1500,bottom:1500};
   const SCAN_COLORS = {mineral:'#ff3624',energy:'#b84dff',biological:'#3dff62'};
   const SCAN_RGB = {mineral:'255,54,36',energy:'184,77,255',biological:'61,255,98'};
@@ -182,6 +185,19 @@
   });
   let activeOrbitTheme = null;
   let activeOrbitThemeIndex = -1;
+  const spaceTheme = new Audio('assets/music/space-theme.mp3');
+  spaceTheme.loop = true;
+  spaceTheme.preload = 'metadata';
+  const landerSfx = {
+    launch:'assets/sfx/lander-launch.wav',
+    return:'assets/sfx/lander-return.wav',
+    shot:'assets/sfx/lander-shot.wav',
+    pickup:'assets/sfx/lander-pickup.wav',
+    bio:'assets/sfx/lander-bio.wav',
+    pain:'assets/sfx/lander-pain.wav',
+    bite:'assets/sfx/lander-bite.wav',
+    death:'assets/sfx/lander-death.wav'
+  };
 
   const state = {
     mode:'system',
@@ -212,6 +228,14 @@
     takeoffOrigin:{x:0.5,y:0.5},
     surfaceFade:0,
     lander:{x:0.5,y:0.5,angle:-Math.PI/2},
+    landerCrew:LANDER_MAX_CREW,
+    landerStorageUsed:0,
+    landerHold:[],
+    landerShots:[],
+    landerShotCooldown:0,
+    landerDamageFlash:0,
+    landerDestroyed:false,
+    landerDeathTimer:0,
     collected:{mineral:0,biological:0,energy:0},
     mineralCargo:{},
     cargoTradeValue:0,
@@ -266,6 +290,10 @@
           y:0.08+seededNoise(sequence+typeIndex*101+1)*0.84,
           collected:false,
           value:1+Math.floor(seededNoise(sequence+7)*4),
+          hp:type==='biological'?2+Math.floor(seededNoise(sequence+19)*2):0,
+          defeated:false,
+          attackCooldown:.4+seededNoise(sequence+23),
+          heading:seededNoise(sequence+29)*TWO_PI,
           ...(mineral||{})
         });
       }
@@ -294,6 +322,8 @@
 
   function playShipyardTheme(){
     stopStarbaseTheme();
+    stopSpaceTheme();
+    stopOrbitTheme();
     try{
       shipyardTheme.volume = typeof getMusicVolume === 'function' ? getMusicVolume(0.68) : 0.58;
       const attempt=shipyardTheme.play();
@@ -307,6 +337,7 @@
 
   function playStarbaseTheme(){
     stopShipyardTheme();
+    stopSpaceTheme();
     stopOrbitTheme();
     try{
       starbaseTheme.volume=typeof getMusicVolume==='function'?getMusicVolume(0.65):0.55;
@@ -320,13 +351,35 @@
   }
 
   function isPlanetMusicMode(){
-    return ['planet','planetDetail','landing','surface','takeoff'].includes(state.mode);
+    return ['planetDetail','landing','surface','takeoff'].includes(state.mode);
+  }
+
+  function isSpaceMusicMode(){
+    return ['system','planet','hyperspace','starmap'].includes(state.mode);
+  }
+
+  function playSpaceTheme(){
+    if(!isSpaceMusicMode()) return;
+    stopShipyardTheme();
+    stopStarbaseTheme();
+    stopOrbitTheme();
+    stopSpaceTheme();
+    try{
+      spaceTheme.volume=typeof getMusicVolume==='function'?getMusicVolume(.62):.52;
+      const attempt=spaceTheme.play();
+      if(attempt&&typeof attempt.catch==='function') attempt.catch(()=>{});
+    }catch(err){}
+  }
+
+  function stopSpaceTheme(reset=false){
+    try{spaceTheme.pause();if(reset)spaceTheme.currentTime=0;}catch(err){}
   }
 
   function playOrbitTheme(selectNew=false){
     if(!orbitThemes.length||!isPlanetMusicMode()) return;
     stopShipyardTheme();
     stopStarbaseTheme();
+    stopSpaceTheme();
     if(!selectNew&&activeOrbitTheme&&!activeOrbitTheme.paused) return;
     if(activeOrbitTheme){try{activeOrbitTheme.pause();activeOrbitTheme.currentTime=0;}catch(err){}}
     let nextIndex=Math.floor(Math.random()*orbitThemes.length);
@@ -354,6 +407,17 @@
     activeOrbitTheme=null;
     playOrbitTheme(true);
   }));
+
+  function playLanderSfx(name,volume=.78){
+    const source=landerSfx[name];
+    if(!source) return;
+    try{
+      const sound=new Audio(source);
+      sound.volume=typeof getSfxVolume==='function'?getSfxVolume(volume):volume;
+      const attempt=sound.play();
+      if(attempt&&typeof attempt.catch==='function') attempt.catch(()=>{});
+    }catch(err){}
+  }
 
   function getShipyardCatalog(){
     if(typeof SHIP_TYPES==='undefined') return [];
@@ -625,6 +689,14 @@
     state.takeoffOrigin = {x:0.5,y:0.5};
     state.surfaceFade = 0;
     state.lander = {x:0.5,y:0.5,angle:-Math.PI/2};
+    state.landerCrew = LANDER_MAX_CREW;
+    state.landerStorageUsed = 0;
+    state.landerHold = [];
+    state.landerShots = [];
+    state.landerShotCooldown = 0;
+    state.landerDamageFlash = 0;
+    state.landerDestroyed = false;
+    state.landerDeathTimer = 0;
     state.collected = {mineral:0,biological:0,energy:0};
     state.mineralCargo = {};
     state.cargoTradeValue = 0;
@@ -649,6 +721,7 @@
     stopShipyardTheme();
     stopStarbaseTheme();
     stopOrbitTheme();
+    stopSpaceTheme(true);
     if(controlsLabel) controlsLabel.innerHTML = 'W / ↑ THRUST&nbsp;&nbsp; A D / ← → TURN&nbsp;&nbsp; E INTERACT&nbsp;&nbsp; ESC MENU';
     updateUi();
   }
@@ -735,6 +808,7 @@
     lastTime = performance.now();
     cancelAnimationFrame(frameId);
     frameId = requestAnimationFrame(loop);
+    playSpaceTheme();
   }
 
   function leaveStory(){
@@ -747,6 +821,7 @@
     stopShipyardTheme();
     stopStarbaseTheme();
     stopOrbitTheme();
+    stopSpaceTheme(true);
     cancelAnimationFrame(frameId);
     intro.classList.add('hidden');
     intro.classList.remove('fading', 'playing');
@@ -1089,6 +1164,7 @@
 
   function departStarbase(){
     state.mode='planet';
+    playSpaceTheme();
     Object.assign(state.planetShip,{x:EARTH_STARBASE.x+32,y:EARTH_STARBASE.y+12,vx:25,vy:9,angle:0.34});
     state.transitionLock=1.8;
     setStarbaseMenuVisible(false);
@@ -1157,6 +1233,7 @@
     if(!state.planet) return;
     state.mode = 'planet';
     stopOrbitTheme();
+    playSpaceTheme();
     Object.assign(state.planetShip,{x:0,y:82,vx:0,vy:24,angle:Math.PI/2});
     state.transitionLock = 1.8;
     setPlanetOpsVisible(false);
@@ -1173,6 +1250,15 @@
     }
     state.mode = 'landing';
     state.landingTimer = 0;
+    state.landerCrew=LANDER_MAX_CREW;
+    state.landerStorageUsed=0;
+    state.landerHold=[];
+    state.landerShots=[];
+    state.landerShotCooldown=0;
+    state.landerDamageFlash=0;
+    state.landerDestroyed=false;
+    state.landerDeathTimer=0;
+    playLanderSfx('launch',.82);
     refreshPlanetOps();
     if(systemSubLabel) systemSubLabel.textContent = 'LANDER DESCENT';
     if(controlsLabel) controlsLabel.textContent = 'PLANET LANDER EN ROUTE';
@@ -1184,12 +1270,19 @@
     state.surfaceFade = 1;
     state.lander = {x:0.5,y:0.5,angle:-Math.PI/2};
     if(systemSubLabel) systemSubLabel.textContent = 'SURFACE EXPEDITION';
-    if(controlsLabel) controlsLabel.textContent = 'W A S D / ARROWS MOVE LANDER    E COLLECT    ESC RECOVER LANDER';
+    if(controlsLabel) controlsLabel.textContent = 'W A S D MOVE   SPACE FIRE   E COLLECT   SHIFT / ESC RETURN';
     setLog('LANDER CONTROL','Touchdown confirmed. Surface team standing by.',6);
     refreshPlanetOps();
   }
 
   function updateLander(dt){
+    state.landerShotCooldown=Math.max(0,state.landerShotCooldown-dt);
+    state.landerDamageFlash=Math.max(0,state.landerDamageFlash-dt*2.6);
+    if(state.landerDestroyed){
+      state.landerDeathTimer+=dt;
+      if(state.landerDeathTimer>=2.25) finishDestroyedLanderRecovery();
+      return;
+    }
     const speed = 0.13;
     let moveX=(keys.right?1:0)-(keys.left?1:0);
     let moveY=(keys.reverse?1:0)-(keys.thrust?1:0);
@@ -1202,23 +1295,136 @@
     }
     state.lander.x = Math.max(0.02,Math.min(0.98,state.lander.x));
     state.lander.y = Math.max(0.02,Math.min(0.98,state.lander.y));
+    updateHostileLifeforms(dt);
+    updateLanderShots(dt);
     state.pickupNotices.forEach(notice=>{notice.age+=dt;});
     state.pickupNotices=state.pickupNotices.filter(notice=>notice.age<notice.duration);
     if(interaction){
       const nearby=state.surfaceNodes.find(node=>!node.collected&&state.scans[node.type]&&Math.hypot(node.x-state.lander.x,node.y-state.lander.y)<=0.045);
       interaction.classList.toggle('hidden',!nearby);
-      if(nearby) interaction.textContent=`PRESS E TO COLLECT ${nearby.material||nearby.type.toUpperCase()}`;
+      if(nearby){
+        interaction.textContent=nearby.type==='biological'&&!nearby.defeated
+          ?'HOSTILE LIFEFORM - PRESS SPACE TO FIRE'
+          :`PRESS E TO COLLECT ${nearby.material||nearby.type.toUpperCase()}`;
+      }
     }
   }
 
+  function updateHostileLifeforms(dt){
+    if(!state.scans.biological) return;
+    state.surfaceNodes.forEach(node=>{
+      if(node.type!=='biological'||node.collected||node.defeated) return;
+      node.attackCooldown=Math.max(0,(node.attackCooldown||0)-dt);
+      const dx=state.lander.x-node.x,dy=state.lander.y-node.y;
+      const distance=Math.hypot(dx,dy)||.001;
+      if(distance<.34){
+        node.heading=Math.atan2(dy,dx);
+        const pursuitSpeed=distance<.065?.012:.027;
+        node.x=Math.max(.02,Math.min(.98,node.x+Math.cos(node.heading)*pursuitSpeed*dt));
+        node.y=Math.max(.02,Math.min(.98,node.y+Math.sin(node.heading)*pursuitSpeed*dt));
+      }else{
+        node.heading=(node.heading||0)+Math.sin(state.elapsed*.7+node.x*19)*dt*.32;
+        node.x=Math.max(.02,Math.min(.98,node.x+Math.cos(node.heading)*.006*dt));
+        node.y=Math.max(.02,Math.min(.98,node.y+Math.sin(node.heading)*.006*dt));
+      }
+      if(distance<.043&&node.attackCooldown<=0){
+        node.attackCooldown=1.15;
+        playLanderSfx('bite',.72);
+        damageLander(1);
+      }
+    });
+  }
+
+  function updateLanderShots(dt){
+    state.landerShots.forEach(shot=>{
+      shot.x+=shot.vx*dt;shot.y+=shot.vy*dt;shot.life-=dt;
+      if(shot.life<=0) return;
+      const target=state.surfaceNodes.find(node=>node.type==='biological'&&!node.collected&&!node.defeated&&state.scans.biological&&Math.hypot(node.x-shot.x,node.y-shot.y)<.027);
+      if(!target) return;
+      shot.life=0;
+      target.hp=Math.max(0,(target.hp||1)-1);
+      if(target.hp<=0){
+        target.defeated=true;
+        setLog('LANDER GUNNER','Hostile lifeform neutralized. Biological data can now be recovered.',4);
+      }
+    });
+    state.landerShots=state.landerShots.filter(shot=>shot.life>0&&shot.x>=0&&shot.x<=1&&shot.y>=0&&shot.y<=1);
+  }
+
+  function fireLanderShot(){
+    if(state.mode!=='surface'||state.landerDestroyed||state.landerShotCooldown>0) return false;
+    const angle=state.lander.angle;
+    state.landerShots.push({
+      x:state.lander.x+Math.cos(angle)*.028,
+      y:state.lander.y+Math.sin(angle)*.028,
+      vx:Math.cos(angle)*.48,
+      vy:Math.sin(angle)*.48,
+      life:.82
+    });
+    state.landerShotCooldown=LANDER_SHOT_COOLDOWN;
+    playLanderSfx('shot',.68);
+    return true;
+  }
+
+  function damageLander(amount=1){
+    if(state.landerDestroyed) return;
+    state.landerCrew=Math.max(0,state.landerCrew-amount);
+    state.landerDamageFlash=1;
+    if(state.landerCrew<=0){
+      state.landerDestroyed=true;
+      state.landerDeathTimer=0;
+      state.landerShots=[];
+      playLanderSfx('death',.9);
+      if(controlsLabel) controlsLabel.textContent='LANDER DESTROYED - RECOVERY SIGNAL LOST';
+      setLog('LANDER CONTROL',`Lander destroyed. ${state.landerStorageUsed} units of expedition cargo lost.`,7);
+    }else{
+      playLanderSfx('pain',.76);
+      setLog('LANDER CREW',`Lifeform attack! Crew remaining: ${state.landerCrew}/${LANDER_MAX_CREW}.`,3);
+    }
+  }
+
+  function finishDestroyedLanderRecovery(){
+    state.mode='planetDetail';
+    state.landerHold=[];
+    state.landerStorageUsed=0;
+    state.landerShots=[];
+    state.landerDestroyed=false;
+    state.landerDeathTimer=0;
+    state.surfaceFade=0;
+    state.planetRevealTimer=PLANET_REVEAL_DURATION;
+    state.planetRevealReady=true;
+    if(planetOpsMenu) planetOpsMenu.classList.remove('hidden');
+    if(systemSubLabel) systemSubLabel.textContent='PLANETARY ANALYSIS';
+    if(controlsLabel) controlsLabel.textContent='LANDER LOST - REPLACEMENT CREW AVAILABLE';
+    setLog('LANDER CONTROL','Expedition lost. A replacement lander is ready for another deployment.',6);
+    refreshPlanetOps();
+  }
+
+  function transferLanderCargo(){
+    state.landerHold.forEach(item=>{
+      if(item.type==='mineral'){
+        const existing=state.mineralCargo[item.material]||{units:0,category:item.category,unitValue:item.unitValue};
+        existing.units+=item.units;
+        state.mineralCargo[item.material]=existing;
+        state.collected.mineral+=item.units;
+        state.cargoTradeValue+=item.units*item.unitValue;
+      }else state.collected[item.type]+=item.units;
+    });
+    const transferred=state.landerStorageUsed;
+    state.landerHold=[];
+    state.landerStorageUsed=0;
+    return transferred;
+  }
+
   function beginLanderTakeoff(){
-    if(state.mode!=='surface') return;
+    if(state.mode!=='surface'||state.landerDestroyed) return;
     clearKeys();
     state.mode='takeoff';
     state.takeoffTimer=0;
     state.takeoffOrigin={x:state.lander.x,y:state.lander.y};
     state.lander.angle=-Math.PI/2;
     state.surfaceFade=0;
+    playLanderSfx('return',.82);
     if(interaction) interaction.classList.add('hidden');
     if(systemSubLabel) systemSubLabel.textContent='LANDER ASCENT';
     if(controlsLabel) controlsLabel.textContent='LANDER RETURNING TO VANGUARD I';
@@ -1231,13 +1437,15 @@
     state.lander.angle=-Math.PI/2;
     state.surfaceFade=Math.max(0,Math.min(1,(state.takeoffTimer-1.95)/0.72));
     if(state.takeoffTimer>=2.75){
+      const transferred=transferLanderCargo();
       state.mode='planetDetail';
       state.surfaceFade=0;
       state.takeoffTimer=0;
       state.lander={x:0.5,y:0.5,angle:-Math.PI/2};
       if(systemSubLabel) systemSubLabel.textContent='PLANETARY ANALYSIS';
       if(controlsLabel) controlsLabel.textContent='SELECT A SCAN OR DISPATCH THE PLANET LANDER';
-      setLog('LANDER CONTROL','Lander recovered aboard Vanguard I. Orbital operations restored.',5);
+      setLog('LANDER CONTROL',`Lander recovered aboard Vanguard I. ${transferred} cargo units transferred to the flagship.`,5);
+      updateUi();
       refreshPlanetOps();
     }
   }
@@ -1328,8 +1536,7 @@
     if(['planet','planetDetail','landing','surface','takeoff'].includes(state.mode)){
       if(distanceTitle) distanceTitle.textContent = 'LOCAL SPACE';
       if(state.mode === 'surface'||state.mode==='takeoff'){
-        const total = state.collected.mineral+state.collected.biological+state.collected.energy;
-        distanceLabel.textContent = `RECOVERED ${total}`;
+        distanceLabel.textContent = `CREW ${state.landerCrew}/${LANDER_MAX_CREW}  HOLD ${state.landerStorageUsed}/${LANDER_STORAGE_CAPACITY}`;
       }else distanceLabel.textContent = state.planet ? state.planet.name : 'PLANET';
       return;
     }
@@ -1563,15 +1770,16 @@
         ctx.beginPath(); ctx.arc(0,0,6,0,TWO_PI); ctx.fill(); ctx.stroke();
         ctx.beginPath(); ctx.moveTo(-10,0);ctx.lineTo(10,0);ctx.moveTo(0,-10);ctx.lineTo(0,10);ctx.stroke();
       }else if(node.type === 'biological'){
-        ctx.fillStyle = '#55ff4f'; ctx.strokeStyle = '#d8ff80';
-        ctx.beginPath(); ctx.moveTo(0,-7);ctx.lineTo(7,6);ctx.lineTo(-7,6);ctx.closePath();ctx.fill();ctx.stroke();
+        ctx.fillStyle = node.defeated?'#8dff70':'#ff5647'; ctx.strokeStyle = node.defeated?'#eaffd2':'#ffb454';
+        if(node.defeated){ctx.rotate(Math.PI/4);ctx.fillRect(-5,-5,10,10);ctx.strokeRect(-5,-5,10,10);}
+        else{ctx.beginPath();ctx.moveTo(0,-8);ctx.lineTo(8,7);ctx.lineTo(-8,7);ctx.closePath();ctx.fill();ctx.stroke();}
       }else{
         ctx.fillStyle = '#37ddff'; ctx.strokeStyle = '#fff';
         ctx.rotate(Math.PI/4);ctx.fillRect(-5,-5,10,10);ctx.strokeRect(-5,-5,10,10);
       }
       ctx.restore();
     });
-    if(includeLander){
+    if(includeLander&&!state.landerDestroyed){
       drawLanderIcon(rect.x+state.lander.x*rect.w,rect.y+state.lander.y*rect.h,0.72,state.lander.angle);
     }
   }
@@ -1673,10 +1881,17 @@
     ctx.save();ctx.translate(x,y);ctx.rotate(angle+Math.PI/2);
     const moving=keys.thrust||keys.reverse||keys.left||keys.right||state.mode==='takeoff';
     if(moving){
-      const flame=ctx.createLinearGradient(-size*.72,0,-size*.19,0);
-      flame.addColorStop(0,'rgba(31,139,255,0)');flame.addColorStop(.65,'rgba(34,169,255,.55)');flame.addColorStop(1,'rgba(213,252,255,.94)');
+      const flame=ctx.createLinearGradient(0,size*.28,0,size*.9);
+      flame.addColorStop(0,'rgba(213,252,255,.94)');flame.addColorStop(.35,'rgba(34,169,255,.55)');flame.addColorStop(1,'rgba(31,139,255,0)');
       ctx.fillStyle=flame;ctx.shadowColor='#31b9ff';ctx.shadowBlur=11;
-      ctx.beginPath();ctx.moveTo(-size*.7,-size*.09);ctx.lineTo(-size*.19,-size*.15);ctx.lineTo(-size*.19,size*.15);ctx.lineTo(-size*.7,size*.09);ctx.closePath();ctx.fill();
+      [-.23,0,.23].forEach(engineX=>{
+        const flicker=size*(.69+Math.random()*.18);
+        ctx.beginPath();
+        ctx.moveTo(size*(engineX-.07),size*.34);
+        ctx.lineTo(size*engineX,flicker);
+        ctx.lineTo(size*(engineX+.07),size*.34);
+        ctx.closePath();ctx.fill();
+      });
     }
     if(planetLanderSprite.complete&&planetLanderSprite.naturalWidth){
       ctx.shadowColor='#50dfff';ctx.shadowBlur=8;ctx.drawImage(planetLanderSprite,-size/2,-size/2,size,size);
@@ -1717,14 +1932,47 @@
         ctx.shadowBlur=6;ctx.fillStyle='#fff';ctx.font='bold 10px Orbitron, sans-serif';ctx.textAlign='center';ctx.fillText(node.material.toUpperCase(),0,-19);
         ctx.font='8px Orbitron, sans-serif';ctx.fillStyle=color;ctx.fillText(node.category.toUpperCase(),0,-8);
       }else if(node.type==='biological'){
-        ctx.shadowColor='#55ff4f';ctx.shadowBlur=16;ctx.fillStyle='#55ff4f';
-        ctx.beginPath();ctx.moveTo(0,-14);ctx.lineTo(12,9);ctx.lineTo(-12,9);ctx.closePath();ctx.fill();
-        ctx.fillStyle='#eaffd2';ctx.font='9px Orbitron, sans-serif';ctx.textAlign='center';ctx.fillText('LIFEFORM',0,-19);
+        if(node.defeated){
+          ctx.shadowColor='#55ff4f';ctx.shadowBlur=16;ctx.fillStyle='#77ff62';ctx.strokeStyle='#eaffd2';ctx.lineWidth=2;
+          ctx.rotate(Math.PI/4);ctx.fillRect(-9,-9,18,18);ctx.strokeRect(-9,-9,18,18);ctx.rotate(-Math.PI/4);
+          ctx.fillStyle='#eaffd2';ctx.font='9px Orbitron, sans-serif';ctx.textAlign='center';ctx.fillText('BIO DATA',0,-19);
+        }else{
+          ctx.rotate(node.heading||0);ctx.shadowColor='#ff3b35';ctx.shadowBlur=18;ctx.strokeStyle='#ff9b43';ctx.fillStyle='#e83d35';ctx.lineWidth=2;
+          for(let leg=0;leg<6;leg++){const a=leg/6*TWO_PI+Math.sin(state.elapsed*8+leg)*.15;ctx.beginPath();ctx.moveTo(Math.cos(a)*5,Math.sin(a)*5);ctx.lineTo(Math.cos(a)*16,Math.sin(a)*16);ctx.stroke();}
+          ctx.beginPath();ctx.arc(0,0,9+Math.sin(state.elapsed*7)*1.5,0,TWO_PI);ctx.fill();ctx.stroke();
+          ctx.rotate(-(node.heading||0));ctx.fillStyle='#ffcf67';ctx.font='9px Orbitron, sans-serif';ctx.textAlign='center';ctx.fillText(`LIFE ${Math.max(0,node.hp||0)}`,0,-21);
+        }
       }else{
         ctx.rotate(Math.PI/4);ctx.shadowColor='#37ddff';ctx.shadowBlur=18;ctx.fillStyle='#37ddff';ctx.strokeStyle='#fff';ctx.lineWidth=2;ctx.fillRect(-9,-9,18,18);ctx.strokeRect(-9,-9,18,18);
       }
       ctx.restore();
     });
+  }
+
+  function drawLanderShots(rect,terrain,sx,sy,cropW,cropH){
+    state.landerShots.forEach(shot=>{
+      const sourceX=shot.x*terrain.width,sourceY=shot.y*terrain.height;
+      if(sourceX<sx||sourceX>sx+cropW||sourceY<sy||sourceY>sy+cropH) return;
+      const x=rect.x+(sourceX-sx)/cropW*rect.w,y=rect.y+(sourceY-sy)/cropH*rect.h;
+      const angle=Math.atan2(shot.vy,shot.vx);
+      ctx.save();ctx.translate(x,y);ctx.rotate(angle);ctx.strokeStyle='#bffcff';ctx.lineWidth=4;ctx.shadowColor='#2bc7ff';ctx.shadowBlur=15;
+      ctx.beginPath();ctx.moveTo(-16,0);ctx.lineTo(9,0);ctx.stroke();ctx.fillStyle='#fff';ctx.beginPath();ctx.arc(9,0,3,0,TWO_PI);ctx.fill();ctx.restore();
+    });
+  }
+
+  function drawLanderHud(rect){
+    const x=rect.x+12,y=rect.y+12,w=238,h=72;
+    ctx.save();ctx.fillStyle='rgba(1,9,15,.86)';ctx.fillRect(x,y,w,h);ctx.strokeStyle='#3cdcec';ctx.lineWidth=1.5;ctx.strokeRect(x,y,w,h);
+    ctx.font='bold 9px Orbitron, sans-serif';ctx.textAlign='left';ctx.fillStyle='#75f5ff';ctx.fillText('PLANET LANDER',x+9,y+15);
+    ctx.fillStyle='#9fb3c0';ctx.fillText('CREW',x+9,y+32);
+    for(let index=0;index<LANDER_MAX_CREW;index++){
+      ctx.fillStyle=index<state.landerCrew?'#48f06e':'#351219';ctx.fillRect(x+50+index*10,y+24,7,10);
+    }
+    ctx.fillStyle='#9fb3c0';ctx.fillText('HOLD',x+9,y+51);
+    ctx.fillStyle='#07141b';ctx.fillRect(x+50,y+43,120,10);ctx.fillStyle=state.landerStorageUsed>=LANDER_STORAGE_CAPACITY?'#ff5b3d':'#f1bd37';ctx.fillRect(x+50,y+43,120*(state.landerStorageUsed/LANDER_STORAGE_CAPACITY),10);
+    ctx.fillStyle='#eef8ff';ctx.fillText(`${state.landerStorageUsed}/${LANDER_STORAGE_CAPACITY}`,x+178,y+52);
+    ctx.fillStyle=state.landerShotCooldown<=0?'#65ff83':'#687681';ctx.fillText(state.landerShotCooldown<=0?'BLASTER READY':'BLASTER CHARGING',x+9,y+67);
+    ctx.restore();
   }
 
   function drawLanding(){
@@ -1753,6 +2001,7 @@
     ctx.drawImage(terrain,sx,sy,cropW,cropH,topRect.x,topRect.y,topRect.w,topRect.h);
     ctx.drawImage(terrain,sensorRect.x,sensorRect.y,sensorRect.w,sensorRect.h);
     drawSurfaceContacts(topRect,terrain,sx,sy,cropW,cropH);
+    drawLanderShots(topRect,terrain,sx,sy,cropW,cropH);
     ctx.strokeStyle='#687684';ctx.lineWidth=3;ctx.strokeRect(topRect.x,topRect.y,topRect.w,topRect.h);ctx.strokeRect(sensorRect.x,sensorRect.y,sensorRect.w,sensorRect.h);
     drawScanNodes(sensorRect,true);
     if(state.mode==='takeoff'){
@@ -1768,7 +2017,15 @@
       drawLanderIcon(landerX,landerY,1+progress*0.42,-Math.PI/2);
       ctx.save();ctx.textAlign='center';ctx.font='bold 13px Orbitron, sans-serif';ctx.fillStyle='#8cffff';ctx.shadowColor='#23e8ff';ctx.shadowBlur=12;
       ctx.fillText('ASCENT TO VANGUARD I',topRect.x+topRect.w/2,topRect.y+topRect.h-18);ctx.restore();
+    }else if(state.landerDestroyed){
+      const blastProgress=Math.min(1,state.landerDeathTimer/1.2);
+      const blastRadius=20+blastProgress*95;
+      const blast=ctx.createRadialGradient(topRect.x+topRect.w/2,topRect.y+topRect.h/2,0,topRect.x+topRect.w/2,topRect.y+topRect.h/2,blastRadius);
+      blast.addColorStop(0,'rgba(255,255,225,1)');blast.addColorStop(.18,'rgba(255,210,44,.95)');blast.addColorStop(.48,'rgba(255,61,20,.72)');blast.addColorStop(1,'rgba(70,0,0,0)');
+      ctx.fillStyle=blast;ctx.beginPath();ctx.arc(topRect.x+topRect.w/2,topRect.y+topRect.h/2,blastRadius,0,TWO_PI);ctx.fill();
+      ctx.fillStyle='#ff6a32';ctx.font='bold 18px Orbitron, sans-serif';ctx.textAlign='center';ctx.fillText('LANDER DESTROYED',topRect.x+topRect.w/2,topRect.y+topRect.h*.78);
     }else drawLanderIcon(topRect.x+topRect.w/2,topRect.y+topRect.h/2,1,state.lander.angle);
+    drawLanderHud(topRect);
     state.pickupNotices.forEach((notice,index)=>{
       const progress=notice.age/notice.duration;
       ctx.save();ctx.globalAlpha=Math.max(0,1-progress);
@@ -1779,6 +2036,7 @@
       ctx.fillText(notice.detail,topRect.x+topRect.w/2,topRect.y+topRect.h/2-21-index*25-progress*32);
       ctx.restore();
     });
+    if(state.landerDamageFlash>0){ctx.fillStyle=`rgba(255,22,12,${state.landerDamageFlash*.28})`;ctx.fillRect(0,0,viewWidth,viewHeight);}
     if(state.surfaceFade>0){ctx.fillStyle=`rgba(0,0,0,${state.surfaceFade})`;ctx.fillRect(0,0,viewWidth,viewHeight);}
   }
 
@@ -1801,10 +2059,17 @@
     const height=width*(flagshipSprite.naturalHeight&&flagshipSprite.naturalWidth?flagshipSprite.naturalHeight/flagshipSprite.naturalWidth:2/3);
     ctx.save();ctx.translate(ship.x,ship.y);ctx.scale(1,1/tilt);ctx.rotate(displayAngle+FLAGSHIP_SPRITE_ROTATION);
     if(keys.thrust){
-      const flame=ctx.createLinearGradient(-width*.64,0,-width*.18,0);
-      flame.addColorStop(0,'rgba(42,151,255,0)');flame.addColorStop(.62,'rgba(36,169,255,.68)');flame.addColorStop(1,'rgba(206,250,255,.95)');
+      const flame=ctx.createLinearGradient(0,height*.3,0,height*.95);
+      flame.addColorStop(0,'rgba(206,250,255,.95)');flame.addColorStop(.38,'rgba(36,169,255,.68)');flame.addColorStop(1,'rgba(42,151,255,0)');
       ctx.fillStyle=flame;ctx.shadowColor='#27a9ff';ctx.shadowBlur=10/scale;
-      ctx.beginPath();ctx.moveTo(-width*(.58+Math.random()*.16),-height*.14);ctx.lineTo(-width*.18,-height*.2);ctx.lineTo(-width*.2,height*.18);ctx.closePath();ctx.fill();
+      [-.24,0,.24].forEach(engineX=>{
+        const flicker=height*(.74+Math.random()*.2);
+        ctx.beginPath();
+        ctx.moveTo(width*(engineX-.075),height*.39);
+        ctx.lineTo(width*engineX,flicker);
+        ctx.lineTo(width*(engineX+.075),height*.39);
+        ctx.closePath();ctx.fill();
+      });
     }
     if(flagshipSprite.complete&&flagshipSprite.naturalWidth){
       ctx.shadowColor=color;ctx.shadowBlur=10/scale;
@@ -1971,6 +2236,12 @@
     if(key==='escape'&&state.mode==='starmap'){
       consumeEscape(event);closeStarmap();return;
     }
+    if(state.mode==='surface'&&(event.key==='Shift'||event.code==='ShiftLeft'||event.code==='ShiftRight')){
+      event.preventDefault();beginLanderTakeoff();return;
+    }
+    if(state.mode==='surface'&&(event.code==='Space'||key===' ')){
+      event.preventDefault();fireLanderShot();return;
+    }
     if(key==='escape'&&state.mode==='surface'){
       consumeEscape(event);beginLanderTakeoff();return;
     }
@@ -2062,7 +2333,7 @@
   }
 
   function collectSurfaceNode(){
-    if(state.mode!=='surface') return;
+    if(state.mode!=='surface'||state.landerDestroyed) return;
     let nearest=null,best=Infinity;
     state.surfaceNodes.forEach(node=>{
       if(node.collected || !state.scans[node.type]) return;
@@ -2070,25 +2341,34 @@
       if(distance<best){best=distance;nearest=node;}
     });
     if(!nearest || best>0.045){setLog('LANDER TEAM','No scanned contact within collection range.',3);return;}
+    if(nearest.type==='biological'&&!nearest.defeated){
+      setLog('LANDER TEAM','Hostile lifeforms must be neutralized before biological data can be recovered.',4);
+      return;
+    }
+    const units=nearest.type==='mineral'?10:nearest.value;
+    if(state.landerStorageUsed+units>LANDER_STORAGE_CAPACITY){
+      setLog('LANDER HOLD',`Insufficient storage. ${LANDER_STORAGE_CAPACITY-state.landerStorageUsed} units remain. Return to Vanguard I to unload.`,5);
+      return;
+    }
     nearest.collected=true;
+    state.landerStorageUsed+=units;
     if(nearest.type==='mineral'){
-      const units=10;
-      const existing=state.mineralCargo[nearest.material]||{units:0,category:nearest.category,unitValue:nearest.unitValue};
-      existing.units+=units;
-      state.mineralCargo[nearest.material]=existing;
-      state.collected.mineral+=units;
-      state.cargoTradeValue+=units*nearest.unitValue;
+      state.landerHold.push({type:'mineral',units,material:nearest.material,category:nearest.category,unitValue:nearest.unitValue});
+      playLanderSfx('pickup',.75);
       state.pickupNotices.unshift({
         text:`+${units} ${nearest.material.toUpperCase()}`,
         detail:`${nearest.category.toUpperCase()} · ${nearest.unitValue} CREDIT${nearest.unitValue===1?'':'S'}/UNIT`,
         color:nearest.color||'#ffe45c',age:0,duration:2.5
       });
       state.pickupNotices=state.pickupNotices.slice(0,3);
-      setLog('LANDER TEAM',`Recovered +${units} ${nearest.material} (${nearest.category}). Stored trade value: ${state.cargoTradeValue} credits.`,5);
+      setLog('LANDER TEAM',`Loaded +${units} ${nearest.material}. Lander storage: ${state.landerStorageUsed}/${LANDER_STORAGE_CAPACITY}.`,5);
     }else{
-      state.collected[nearest.type]+=nearest.value;
+      state.landerHold.push({type:nearest.type,units});
       const names={biological:'biological data',energy:'energy technology'};
-      setLog('LANDER TEAM',`Recovered ${nearest.value} ${names[nearest.type]}.`,4);
+      playLanderSfx(nearest.type==='biological'?'bio':'pickup',.76);
+      state.pickupNotices.unshift({text:`+${units} ${nearest.type==='biological'?'BIO DATA':'ENERGY DATA'}`,detail:`HOLD ${state.landerStorageUsed}/${LANDER_STORAGE_CAPACITY}`,color:nearest.type==='biological'?'#63ff75':'#52e7ff',age:0,duration:2.5});
+      state.pickupNotices=state.pickupNotices.slice(0,3);
+      setLog('LANDER TEAM',`Recovered ${units} ${names[nearest.type]}. Lander storage: ${state.landerStorageUsed}/${LANDER_STORAGE_CAPACITY}.`,4);
     }
     updateUi();
   }
@@ -2159,7 +2439,7 @@
     start: startSystemGame,
     finishIntro,
     leave: leaveStory,
-    getState:()=>({mode:state.mode,currentSystem:state.currentSystem,planet:state.planet&&state.planet.name,missionStage:state.missionStage,fuel:state.fuel,maxFuel:state.maxFuel,fuelRange:fuelRange(),shipAngle:activeShip().angle,planetReveal:state.planetRevealTimer,planetRevealReady:state.planetRevealReady,orbitTheme:activeOrbitThemeIndex+1,orbitThemeActive:!!activeOrbitTheme,autopilotTarget:state.autopilotTarget&&{...state.autopilotTarget},scans:{...state.scans},scanType:state.scanAnimation.type,mineralCargo:JSON.parse(JSON.stringify(state.mineralCargo)),cargoTradeValue:state.cargoTradeValue,credits:state.credits,constructedShips:state.constructedShips.map(ship=>({...ship})),installedModules:[...state.installedModules],upgrades:{...state.upgrades},landerAngle:state.lander.angle,remainingMinerals:state.surfaceNodes.filter(node=>node.type==='mineral'&&!node.collected).length,active:storyActive,intro:introRunning}),
+    getState:()=>({mode:state.mode,currentSystem:state.currentSystem,planet:state.planet&&state.planet.name,missionStage:state.missionStage,fuel:state.fuel,maxFuel:state.maxFuel,fuelRange:fuelRange(),shipAngle:activeShip().angle,planetReveal:state.planetRevealTimer,planetRevealReady:state.planetRevealReady,spaceThemeActive:!spaceTheme.paused,orbitTheme:activeOrbitThemeIndex+1,orbitThemeActive:!!activeOrbitTheme&&!activeOrbitTheme.paused,autopilotTarget:state.autopilotTarget&&{...state.autopilotTarget},scans:{...state.scans},scanType:state.scanAnimation.type,mineralCargo:JSON.parse(JSON.stringify(state.mineralCargo)),cargoTradeValue:state.cargoTradeValue,credits:state.credits,constructedShips:state.constructedShips.map(ship=>({...ship})),installedModules:[...state.installedModules],upgrades:{...state.upgrades},landerAngle:state.lander.angle,landerCrew:state.landerCrew,landerStorageUsed:state.landerStorageUsed,landerHold:state.landerHold.map(item=>({...item})),landerShots:state.landerShots.length,landerDestroyed:state.landerDestroyed,remainingMinerals:state.surfaceNodes.filter(node=>node.type==='mineral'&&!node.collected).length,remainingLifeforms:state.surfaceNodes.filter(node=>node.type==='biological'&&!node.collected&&!node.defeated).length,biologicalData:state.surfaceNodes.filter(node=>node.type==='biological'&&!node.collected&&node.defeated).length,active:storyActive,intro:introRunning}),
     setPlayer:(x,y)=>{ const ship=activeShip(); ship.x=x; ship.y=y; ship.vx=0; ship.vy=0; },
     enterPlanet:(name)=>{ const body=bodies.find(item=>item.name===String(name).toUpperCase()); if(body) enterPlanetSystem(body); },
     openPlanet:(name)=>{ const body=bodies.find(item=>item.name===String(name).toUpperCase()); if(body){enterPlanetSystem(body);enterPlanetDetail();} },
@@ -2169,6 +2449,13 @@
     advanceScan:updatePlanetScan,
     goToFirstMineral:()=>{const node=state.surfaceNodes.find(item=>item.type==='mineral'&&!item.collected);if(node){state.mode='surface';state.scans.mineral=true;state.lander={x:node.x,y:node.y,angle:-Math.PI/2};}return node;},
     collectFirstMineral:()=>{const node=state.surfaceNodes.find(item=>item.type==='mineral'&&!item.collected);if(node){state.mode='surface';state.scans.mineral=true;state.lander={x:node.x,y:node.y,angle:-Math.PI/2};collectSurfaceNode();}return node;},
+    goToFirstLifeform:()=>{const node=state.surfaceNodes.find(item=>item.type==='biological'&&!item.collected&&!item.defeated);if(node){state.mode='surface';state.scans.biological=true;state.lander={x:Math.max(.02,node.x-.09),y:node.y,angle:0};}return node;},
+    collectFirstBio:()=>{const node=state.surfaceNodes.find(item=>item.type==='biological'&&!item.collected&&item.defeated);if(node){state.mode='surface';state.scans.biological=true;state.lander={x:node.x,y:node.y,angle:0};collectSurfaceNode();}return node;},
+    fireLanderShot,
+    advanceLander:updateLander,
+    damageLander,
+    beginLanderTakeoff,
+    advanceTakeoff:updateLanderTakeoff,
     dockStarbase:()=>{const earth=bodies.find(body=>body.name==='EARTH');if(earth){state.planet=earth;enterStarbase();}},
     grantCredits:(amount=500)=>{state.credits+=Math.max(0,Number(amount)||0);updateShipyard();updateOutfit();updateUi();return state.credits;},
     openShipyard,
