@@ -963,6 +963,23 @@
     }
   }
 
+  function cancelLanderDescent(){
+    if(state.mode!=='landing') return;
+    clearKeys();
+    state.mode='planetDetail';
+    state.landingTimer=0;
+    state.surfaceFade=0;
+    if(systemSubLabel) systemSubLabel.textContent='PLANETARY ANALYSIS';
+    if(controlsLabel) controlsLabel.textContent='SELECT A SCAN OR DISPATCH THE PLANET LANDER';
+    setLog('LANDER CONTROL','Descent aborted. Lander secured aboard Vanguard I.',4);
+    refreshPlanetOps();
+  }
+
+  function consumeEscape(event){
+    event.preventDefault();
+    event.stopImmediatePropagation();
+  }
+
   function enterHyperspace(){
     const angle = Math.atan2(state.player.y,state.player.x);
     state.mode = 'hyperspace';
@@ -1543,10 +1560,19 @@
       event.preventDefault();return;
     }
     if(key==='escape'&&state.mode==='surface'){
-      event.preventDefault();beginLanderTakeoff();return;
+      consumeEscape(event);beginLanderTakeoff();return;
     }
     if(key==='escape'&&state.mode==='takeoff'){
-      event.preventDefault();return;
+      consumeEscape(event);return;
+    }
+    if(key==='escape'&&state.mode==='landing'){
+      consumeEscape(event);cancelLanderDescent();return;
+    }
+    if(key==='escape'&&state.mode==='planetDetail'){
+      consumeEscape(event);returnToPlanetOrbit();return;
+    }
+    if(key==='escape'&&state.mode==='planet'){
+      consumeEscape(event);exitPlanetSystem();return;
     }
     if(key === 'escape') { event.preventDefault(); leaveStory(); return; }
     if(key === 'w' || event.key === 'ArrowUp') keys.thrust = true;
@@ -1713,7 +1739,7 @@
   if(outfitNext) outfitNext.addEventListener('click',()=>cycleOutfit(1));
   if(outfitInstall) outfitInstall.addEventListener('click',installSelectedModule);
   if(outfitReturn) outfitReturn.addEventListener('click',returnToStarbase);
-  window.addEventListener('keydown',handleKeyDown);
+  window.addEventListener('keydown',handleKeyDown,true);
   window.addEventListener('keyup',handleKeyUp);
   window.addEventListener('blur',clearKeys);
   window.addEventListener('resize',()=>{ if(storyActive) resize(); });
