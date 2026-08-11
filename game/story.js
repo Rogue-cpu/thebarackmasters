@@ -71,6 +71,11 @@
   const communicationText = document.getElementById('communication-text');
   const communicationChoices = document.getElementById('communication-choices');
   const communicationExit = document.getElementById('communication-exit');
+  const communicationRewind = document.getElementById('communication-rewind');
+  const communicationPlay = document.getElementById('communication-play');
+  const communicationProgress = document.getElementById('communication-progress');
+  const communicationForward = document.getElementById('communication-forward');
+  const communicationTime = document.getElementById('communication-time');
 
   const TWO_PI = Math.PI * 2;
   const SYSTEM_EDGE = 760;
@@ -155,14 +160,20 @@
       name:'COMMANDER WALTER BRIGGS',
       title:'TAFTIAN STARBASE COMMANDER',
       location:'TAFTIAN DEEP-SPACE STARBASE',
-      portrait:'assets/story/starbase-commander.png?v=briggs-1',
+      portrait:'assets/story/commander-walter-closed.png',
+      portraits:[
+        'assets/story/commander-walter-closed.png',
+        'assets/story/commander-walter-mouth-mid.png',
+        'assets/story/commander-walter-mouth-open.png'
+      ],
+      voice:{rate:.92,pitch:.82,volume:1},
       alt:'Commander Walter Briggs aboard Taftian Starbase',
       greeting:'welcome',
       nodes:{
         welcome:{
           text:()=>!isMilestoneComplete('pioneerInvestigated')
-            ? 'Welcome, Captain. Taftian Starbase is operational, and our engineers and specialists are ready to support Vanguard I. What do you need?'
-            : 'Captain, Pioneer One has been located. Taftian Starbase remains at your disposal while the Federation investigation continues.',
+            ? 'Vanguard I, this is Commander Walter Briggs. Taftian Starbase is operational, but only just. My engineers are still bringing pressure sections online, our supply officers are counting every fuel cell twice, and half my staff arrived before their equipment. Even so, you finally have a permanent port beyond Source. Tell me what your expedition needs.'
+            : 'Captain, welcome back. The Pioneer One evidence changed the mood here overnight. Supply ships that were delayed for weeks are suddenly arriving ahead of schedule, departments that ignored this mission now want representatives aboard my station, and Source is asking for continuous reports. Taftian Starbase remains at your disposal while we turn that renewed attention into something useful.',
           choices:[
             {label:'What are my current orders?',next:'mission'},
             {label:'What services does the starbase provide?',next:'services'},
@@ -171,18 +182,18 @@
         },
         mission:{
           text:()=>!isMilestoneComplete('pioneerInvestigated')
-            ? 'Your primary directive is to locate Pioneer One on Chiron and determine why the first expedition from Source never returned.'
-            : 'Pioneer One has been located. Preserve its recovered data while the Federation establishes a permanent deep-space foothold.',
+            ? 'Your primary directive remains the recovery of Pioneer One. Source needs evidence, not speculation. Survey the assigned worlds, protect anything you recover, and bring significant findings home for analysis. This station can keep Vanguard flying, but it cannot replace the expedition if you take unnecessary risks.'
+            : 'Pioneer One has been located, but finding the wreckage answered only the smallest question. Preserve every recorder fragment and material sample. Source leadership is expanding the interstellar program, while my orders are to secure this foothold and prepare for whatever your investigation has uncovered.',
           choices:[{label:'Understood. What else?',next:'welcome'}]
         },
         services:{
-          text:'Mineral cargo is converted into resource credits when you dock. Outfitting sells fuel and installs flagship modules. The Shipyard recruits crew and constructs escort vessels. Every purchase draws from the same resource-credit reserve.',
+          text:'At present, this is an expedition-support station, not a mature naval base. Docking crews can unload mineral cargo, replenish fuel, perform essential repairs, process research material, and maintain your campaign records. Outfitting and ship construction depend on technology and industrial authorization from Source. A vessel appearing in combat records does not mean my yard knows how to build it. Bring us blueprints, allies, and working technology, and that situation will change.',
           choices:[{label:'Tell me about Pioneer One.',next:'pioneer'},{label:'Return to the main briefing.',next:'welcome'}]
         },
         pioneer:{
           text:()=>!isMilestoneComplete('pioneerInvestigated')
-            ? 'Pioneer One was the first Taftian expedition sent from Source into this region. Its telemetry ended without a distress call. Vanguard I was launched to find it.'
-            : 'The recovered wreckage confirms Pioneer One reached Chiron. Its surviving records now anchor the Federation investigation.',
+            ? 'Pioneer One was the first Taftian expedition sent from Source into this region. Its telemetry ended without a distress call, and political support for continued searching was fading when Vanguard I launched. Every authentic clue you recover proves the mission followed a real trail. Do not assume the silence was an accident, but do not report conclusions the evidence cannot support.'
+            : 'The recovered wreckage confirms Pioneer One reached Chiron and that its disappearance was not the simple mechanical loss many officials expected. Its surviving records now anchor the Federation investigation. That truth is why this starbase exists, why the program is expanding, and why people who once dismissed the expedition are suddenly watching every move you make.',
           choices:[{label:'Review my orders.',next:'mission'},{label:'Return to the main briefing.',next:'welcome'}]
         }
       }
@@ -285,6 +296,17 @@
   let starmapField = [];
   const terrainCache = {};
   const generatedSystemCache = {};
+  let communicationUtterance = null;
+  let communicationSpeechText = '';
+  let communicationSpeechPosition = 0;
+  let communicationSpeechToken = 0;
+  let communicationSpeechTimer = 0;
+  let communicationMouthTimer = 0;
+  let communicationSpeechPaused = false;
+  let communicationSpeechElapsed = 0;
+  let communicationSpeechEstimate = 1;
+  let communicationSpeechStart = 0;
+  let communicationSpeechLastTick = 0;
   const flagshipSprite = new Image();
   flagshipSprite.src = 'assets/story/vanguard-flagship.png';
   const FLAGSHIP_SPRITE_ROTATION = Math.PI/2;
@@ -1105,13 +1127,160 @@
     return typeof value==='function'?value():value;
   }
 
+  function communicationDuration(text){
+    const words=String(text||'').trim().split(/\s+/).filter(Boolean).length;
+    return Math.max(2.5,words/2.35);
+  }
+
+  function formatCommunicationTime(seconds){
+    const value=Math.max(0,Math.floor(seconds||0));
+    return `${Math.floor(value/60)}:${String(value%60).padStart(2,'0')}`;
+  }
+
+  function updateCommunicationTimeline(){
+    const length=Math.max(1,communicationSpeechText.length);
+    const ratio=Math.max(0,Math.min(1,communicationSpeechPosition/length));
+    if(communicationProgress){
+      communicationProgress.max=String(length);
+      communicationProgress.value=String(Math.round(communicationSpeechPosition));
+    }
+    if(communicationTime){
+      const total=communicationDuration(communicationSpeechText);
+      communicationTime.textContent=`${formatCommunicationTime(total*ratio)} / ${formatCommunicationTime(total)}`;
+    }
+  }
+
+  function setCommunicationMouthFrame(index=0){
+    const contact=COMMUNICATION_CONTACTS[state.communicationContact];
+    const frames=contact&&contact.portraits;
+    if(!communicationPortrait||!frames||!frames.length) return;
+    communicationPortrait.src=frames[Math.max(0,Math.min(frames.length-1,index))];
+  }
+
+  function stopCommunicationMouth(){
+    clearInterval(communicationMouthTimer);
+    communicationMouthTimer=0;
+    setCommunicationMouthFrame(0);
+  }
+
+  function startCommunicationMouth(){
+    stopCommunicationMouth();
+    const contact=COMMUNICATION_CONTACTS[state.communicationContact];
+    if(!contact||!contact.portraits||contact.portraits.length<2) return;
+    let frame=0;
+    const pattern=[1,0,2,1,0,1,2,0];
+    communicationMouthTimer=setInterval(()=>{
+      if(communicationSpeechPaused) return;
+      setCommunicationMouthFrame(pattern[frame++%pattern.length]);
+    },115);
+  }
+
+  function preferredCommunicationVoice(){
+    if(!('speechSynthesis' in window)) return null;
+    const voices=window.speechSynthesis.getVoices();
+    const names=['Microsoft David','Microsoft Mark','Microsoft Guy','Google US English'];
+    return names.map(name=>voices.find(voice=>voice.name.includes(name))).find(Boolean)||voices.find(voice=>/^en(-|_)/i.test(voice.lang))||null;
+  }
+
+  function stopCommunicationSpeech(reset=false){
+    communicationSpeechToken+=1;
+    clearInterval(communicationSpeechTimer);communicationSpeechTimer=0;
+    stopCommunicationMouth();
+    communicationUtterance=null;
+    communicationSpeechPaused=false;
+    if('speechSynthesis' in window) window.speechSynthesis.cancel();
+    if(reset){communicationSpeechText='';communicationSpeechPosition=0;}
+    if(communicationPlay) communicationPlay.textContent=communicationSpeechText?'REPLAY':'PLAY';
+    updateCommunicationTimeline();
+  }
+
+  function speakCommunicationText(text,startPosition=0){
+    const fullText=String(text||'');
+    stopCommunicationSpeech(false);
+    communicationSpeechText=fullText;
+    communicationSpeechPosition=Math.max(0,Math.min(fullText.length,Math.floor(startPosition)||0));
+    updateCommunicationTimeline();
+    if(!fullText||!('speechSynthesis' in window)||typeof SpeechSynthesisUtterance==='undefined'){
+      if(communicationPlay) communicationPlay.disabled=true;
+      return false;
+    }
+    if(communicationPlay){communicationPlay.disabled=false;communicationPlay.textContent='PAUSE';}
+    const token=++communicationSpeechToken;
+    const contact=COMMUNICATION_CONTACTS[state.communicationContact]||{};
+    const voiceSettings=contact.voice||{};
+    const utterance=new SpeechSynthesisUtterance(fullText.slice(communicationSpeechPosition));
+    const voice=preferredCommunicationVoice();
+    if(voice) utterance.voice=voice;
+    utterance.rate=voiceSettings.rate||.96;
+    utterance.pitch=voiceSettings.pitch||.9;
+    utterance.volume=voiceSettings.volume||1;
+    communicationUtterance=utterance;
+    communicationSpeechStart=communicationSpeechPosition;
+    communicationSpeechElapsed=0;
+    communicationSpeechEstimate=Math.max(1200,communicationDuration(utterance.text)*1000/utterance.rate);
+    communicationSpeechLastTick=performance.now();
+    utterance.onstart=()=>{if(token===communicationSpeechToken) startCommunicationMouth();};
+    utterance.onboundary=event=>{
+      if(token!==communicationSpeechToken) return;
+      communicationSpeechPosition=Math.max(communicationSpeechPosition,communicationSpeechStart+(event.charIndex||0));
+      updateCommunicationTimeline();
+    };
+    utterance.onend=()=>{
+      if(token!==communicationSpeechToken) return;
+      clearInterval(communicationSpeechTimer);communicationSpeechTimer=0;
+      communicationSpeechPosition=fullText.length;
+      communicationUtterance=null;
+      stopCommunicationMouth();
+      if(communicationPlay) communicationPlay.textContent='REPLAY';
+      updateCommunicationTimeline();
+    };
+    utterance.onerror=()=>{
+      if(token!==communicationSpeechToken) return;
+      clearInterval(communicationSpeechTimer);communicationSpeechTimer=0;
+      communicationUtterance=null;stopCommunicationMouth();
+      if(communicationPlay) communicationPlay.textContent='PLAY';
+    };
+    communicationSpeechTimer=setInterval(()=>{
+      if(token!==communicationSpeechToken||communicationSpeechPaused) return;
+      const now=performance.now();communicationSpeechElapsed+=now-communicationSpeechLastTick;communicationSpeechLastTick=now;
+      const progress=Math.min(.985,communicationSpeechElapsed/communicationSpeechEstimate);
+      communicationSpeechPosition=Math.max(communicationSpeechPosition,communicationSpeechStart+(fullText.length-communicationSpeechStart)*progress);
+      updateCommunicationTimeline();
+    },100);
+    window.speechSynthesis.speak(utterance);
+    return true;
+  }
+
+  function seekCommunicationSpeech(amount){
+    if(!communicationSpeechText) return false;
+    const jump=Math.max(28,Math.round(communicationSpeechText.length*.1));
+    const next=Math.max(0,Math.min(communicationSpeechText.length,communicationSpeechPosition+Math.sign(amount)*jump));
+    return speakCommunicationText(communicationSpeechText,next);
+  }
+
+  function toggleCommunicationSpeech(){
+    if(!communicationSpeechText||!('speechSynthesis' in window)) return false;
+    if(communicationUtterance&&!communicationSpeechPaused){
+      window.speechSynthesis.pause();communicationSpeechPaused=true;stopCommunicationMouth();
+      if(communicationPlay) communicationPlay.textContent='RESUME';
+      return true;
+    }
+    if(communicationUtterance&&communicationSpeechPaused){
+      communicationSpeechPaused=false;communicationSpeechLastTick=performance.now();window.speechSynthesis.resume();startCommunicationMouth();
+      if(communicationPlay) communicationPlay.textContent='PAUSE';
+      return true;
+    }
+    return speakCommunicationText(communicationSpeechText,communicationSpeechPosition>=communicationSpeechText.length?0:communicationSpeechPosition);
+  }
+
   function renderCommunicationNode(nodeId){
     const contact=COMMUNICATION_CONTACTS[state.communicationContact];
     if(!contact) return false;
     const resolvedId=contact.nodes[nodeId]?nodeId:contact.greeting;
     const node=contact.nodes[resolvedId];
     state.communicationNode=resolvedId;
-    if(communicationText) communicationText.textContent=communicationValue(node.text);
+    const spokenText=communicationValue(node.text);
+    if(communicationText) communicationText.textContent=spokenText;
     const choices=communicationValue(node.choices)||[];
     if(communicationChoices){
       communicationChoices.innerHTML='';
@@ -1123,6 +1292,7 @@
         communicationChoices.appendChild(button);
       });
     }
+    speakCommunicationText(spokenText,0);
     return true;
   }
 
@@ -1156,6 +1326,7 @@
     if(communicationName) communicationName.textContent=contact.name;
     if(communicationTitle) communicationTitle.textContent=contact.title;
     if(communicationPortrait){communicationPortrait.src=contact.portrait;communicationPortrait.alt=contact.alt;}
+    (contact.portraits||[]).forEach(source=>{const frame=new Image();frame.src=source;});
     renderCommunicationNode(nodeId||contact.greeting);
     if(controlsLabel) controlsLabel.textContent='SELECT A RESPONSE — ESC TO END TRANSMISSION';
     updateUi();
@@ -1164,6 +1335,7 @@
 
   function closeCommunication(){
     if(state.mode!=='communication') return false;
+    stopCommunicationSpeech(true);
     if(communicationScreen){communicationScreen.classList.add('hidden');communicationScreen.setAttribute('aria-hidden','true');}
     state.communicationContact=null;
     state.communicationNode=null;
@@ -1237,6 +1409,7 @@
   }
 
   function resetStory(){
+    stopCommunicationSpeech(true);
     state.mode = 'planet';
     state.currentSystem = HOME_SYSTEM;
     state.starmapReturnMode = 'planet';
@@ -1396,6 +1569,7 @@
     introRunning = false;
     introFinishing = false;
     storyActive = false;
+    stopCommunicationSpeech(true);
     stopShipyardTheme();
     stopStarbaseTheme();
     stopOrbitTheme();
@@ -2911,6 +3085,9 @@
     const key = event.key.toLowerCase();
     if(state.mode==='communication'){
       if(key==='escape') closeCommunication();
+      else if(event.key==='ArrowLeft') seekCommunicationSpeech(-1);
+      else if(event.key==='ArrowRight') seekCommunicationSpeech(1);
+      else if(event.code==='Space'||key===' ') toggleCommunicationSpeech();
       else if(/^[1-9]$/.test(key)) chooseCommunicationChoice(Number(key)-1);
       event.preventDefault();return;
     }
@@ -3141,6 +3318,10 @@
   if(outfitRefuel) outfitRefuel.addEventListener('click',buyFuel);
   if(outfitReturn) outfitReturn.addEventListener('click',returnToStarbase);
   if(communicationExit) communicationExit.addEventListener('click',closeCommunication);
+  if(communicationRewind) communicationRewind.addEventListener('click',()=>seekCommunicationSpeech(-1));
+  if(communicationForward) communicationForward.addEventListener('click',()=>seekCommunicationSpeech(1));
+  if(communicationPlay) communicationPlay.addEventListener('click',toggleCommunicationSpeech);
+  if(communicationProgress) communicationProgress.addEventListener('change',()=>speakCommunicationText(communicationSpeechText,Number(communicationProgress.value)||0));
   window.addEventListener('keydown',handleKeyDown,true);
   window.addEventListener('keyup',handleKeyUp);
   window.addEventListener('blur',clearKeys);
