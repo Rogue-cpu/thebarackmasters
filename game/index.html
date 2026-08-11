@@ -52,6 +52,23 @@
         <button type="button" data-starbase-action="shipyard">SHIPYARD</button>
         <button type="button" data-starbase-action="depart">DEPART STARBASE</button>
       </nav>
+      <section id="story-communication" class="story-communication hidden" aria-label="Communications channel" aria-hidden="true">
+        <header class="communication-header"><span id="communication-location">EARTH STARBASE</span><small>COMMUNICATION CHANNEL</small></header>
+        <div class="communication-stage">
+          <div class="communication-grid"></div>
+          <img id="communication-portrait" class="communication-portrait" src="assets/story/starbase-commander.png" alt="Commander Amara Cole aboard Earth Starbase">
+          <div class="communication-scan"></div>
+          <div class="communication-ident">
+            <strong id="communication-name">COMMANDER AMARA COLE</strong>
+            <span id="communication-title">EARTH STARBASE COMMANDER</span>
+          </div>
+        </div>
+        <div class="communication-console">
+          <div id="communication-text" class="communication-text" aria-live="polite"></div>
+          <nav id="communication-choices" class="communication-choices" aria-label="Dialogue responses"></nav>
+          <button id="communication-exit" class="communication-exit" type="button">END TRANSMISSION</button>
+        </div>
+      </section>
       <section id="shipyard-screen" class="shipyard-screen hidden" aria-label="Starbase shipyard">
         <header class="shipyard-header"><span>SHIPYARD</span><small>EARTH STARBASE</small></header>
         <div class="shipyard-drydock">
@@ -71,6 +88,10 @@
           </div>
           <button id="shipyard-next" class="shipyard-cycle" type="button" aria-label="Next hull">▶</button>
           <div class="shipyard-credit-readout">CREDITS <strong id="shipyard-credits">0</strong></div>
+          <div class="starbase-service shipyard-crew-service">
+            <span>FLAGSHIP CREW <strong id="shipyard-crew">50 / 100</strong></span>
+            <button id="shipyard-recruit" type="button">RECRUIT 5 CREW — 10 CREDITS</button>
+          </div>
           <div id="shipyard-status" class="shipyard-status">Select a hull for construction.</div>
           <button id="shipyard-build" class="shipyard-build" type="button">BUILD SHIP</button>
           <button id="shipyard-return" class="shipyard-return" type="button">RETURN TO STARBASE</button>
@@ -102,6 +123,10 @@
           </div>
           <button id="outfit-next" class="outfit-cycle" type="button" aria-label="Next module">▶</button>
           <div class="outfit-credit-readout">CREDITS <strong id="outfit-credits">0</strong></div>
+          <div class="starbase-service outfit-fuel-service">
+            <span>FUEL RESERVES <strong id="outfit-fuel">100 / 100</strong></span>
+            <button id="outfit-refuel" type="button">BUY 10 FUEL — 5 CREDITS</button>
+          </div>
           <div id="outfit-status" class="outfit-status">Select a module to install.</div>
           <button id="outfit-install" class="outfit-install" type="button">INSTALL MODULE</button>
           <button id="outfit-return" class="outfit-return" type="button">RETURN TO STARBASE</button>
@@ -123,7 +148,7 @@
           <img src="assets/story/vanguard-flagship.png" alt="Vanguard I flagship">
         </div>
       </section>
-      <section class="story-crew-readout"><span>CREW</span><strong>50</strong></section>
+      <section class="story-crew-readout"><span>CREW</span><strong id="story-crew-label">50/100</strong></section>
       <section class="story-date-readout">MISSION DAY <strong id="story-day">001</strong></section>
       <section class="story-mission-panel">
         <div class="story-panel-kicker">PRIMARY DIRECTIVE</div>
@@ -451,7 +476,7 @@
     </div>
   </div>
   <script src="main.js"></script>
-  <script src="story.js?v=hyperspace-transits-1"></script>
+  <script src="story.js?v=starbase-services-1"></script>
   <script src="mainMenuMusic.js"></script>
 </body>
 </html>

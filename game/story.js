@@ -18,6 +18,7 @@
   const interaction = document.getElementById('story-interaction');
   const fuelFill = document.getElementById('story-fuel-fill');
   const fuelLabel = document.getElementById('story-fuel-label');
+  const crewLabel = document.getElementById('story-crew-label');
   const dayLabel = document.getElementById('story-day');
   const distanceTitle = document.getElementById('story-distance-label');
   const distanceLabel = document.getElementById('story-distance');
@@ -43,6 +44,8 @@
   const shipyardStatus = document.getElementById('shipyard-status');
   const shipyardBuild = document.getElementById('shipyard-build');
   const shipyardReturn = document.getElementById('shipyard-return');
+  const shipyardCrew = document.getElementById('shipyard-crew');
+  const shipyardRecruit = document.getElementById('shipyard-recruit');
   const outfitScreen = document.getElementById('outfit-screen');
   const outfitSlots = document.getElementById('outfit-slots');
   const outfitPrev = document.getElementById('outfit-prev');
@@ -58,6 +61,16 @@
   const outfitStatTurn = document.getElementById('outfit-stat-turn');
   const outfitStatWeapon = document.getElementById('outfit-stat-weapon');
   const outfitStatFuel = document.getElementById('outfit-stat-fuel');
+  const outfitFuel = document.getElementById('outfit-fuel');
+  const outfitRefuel = document.getElementById('outfit-refuel');
+  const communicationScreen = document.getElementById('story-communication');
+  const communicationLocation = document.getElementById('communication-location');
+  const communicationPortrait = document.getElementById('communication-portrait');
+  const communicationName = document.getElementById('communication-name');
+  const communicationTitle = document.getElementById('communication-title');
+  const communicationText = document.getElementById('communication-text');
+  const communicationChoices = document.getElementById('communication-choices');
+  const communicationExit = document.getElementById('communication-exit');
 
   const TWO_PI = Math.PI * 2;
   const SYSTEM_EDGE = 760;
@@ -77,6 +90,10 @@
   const SCAN_RGB = {mineral:'255,54,36',energy:'184,77,255',biological:'61,255,98'};
   const MAX_ESCORTS = 12;
   const MAX_MODULES = 10;
+  const FUEL_PURCHASE_AMOUNT = 10;
+  const FUEL_PURCHASE_COST = 5;
+  const CREW_RECRUIT_AMOUNT = 5;
+  const CREW_RECRUIT_COST = 10;
   const OUTFIT_MODULES = [
     {id:'fuelTanks',name:'FUEL TANK',short:'FUEL',cost:20,description:'Adds 25 units to maximum fuel capacity.'},
     {id:'dynamos',name:'DYNAMO UNIT',short:'DYN',cost:35,description:'Regenerates fuel and reduces drive consumption.'},
@@ -84,6 +101,44 @@
     {id:'turningJets',name:'TURNING JETS',short:'JET',cost:25,description:'Increases the flagship turning rate by 10%.'},
     {id:'weapons',name:'ION-BOLT GUN',short:'GUN',cost:40,description:'Increases flagship weapon power by 20%.'}
   ];
+  const COMMUNICATION_CONTACTS = {
+    starbaseCommander:{
+      name:'COMMANDER AMARA COLE',
+      title:'EARTH STARBASE COMMANDER',
+      location:'EARTH STARBASE',
+      portrait:'assets/story/starbase-commander.png',
+      alt:'Commander Amara Cole aboard Earth Starbase',
+      greeting:'welcome',
+      nodes:{
+        welcome:{
+          text:()=>state.missionStage===0
+            ? 'Welcome back, Captain. Earth Starbase is operational, and our engineers and specialists are ready to support Vanguard I. What do you need?'
+            : 'Captain, the Pioneer One recorder confirms the trail continues toward Alpha Centauri. Earth Starbase remains at your disposal.',
+          choices:[
+            {label:'What are my current orders?',next:'mission'},
+            {label:'What services does the starbase provide?',next:'services'},
+            {label:'What do we know about Pioneer One?',next:'pioneer'}
+          ]
+        },
+        mission:{
+          text:()=>state.missionStage===0
+            ? 'Your primary directive is to locate Pioneer One and determine why humanity’s first deep-space vessel never returned. Investigate the unidentified signal in Sol before proceeding beyond the system.'
+            : 'Follow Pioneer One’s final vector to Alpha Centauri. Preserve enough fuel for the return journey, and report any evidence of outside interference.',
+          choices:[{label:'Understood. What else?',next:'welcome'}]
+        },
+        services:{
+          text:'Mineral cargo is converted into resource credits when you dock. Outfitting sells fuel and installs flagship modules. The Shipyard recruits crew and constructs escort vessels. Every purchase draws from the same resource-credit reserve.',
+          choices:[{label:'Tell me about Pioneer One.',next:'pioneer'},{label:'Return to the main briefing.',next:'welcome'}]
+        },
+        pioneer:{
+          text:()=>state.missionStage===0
+            ? 'Pioneer One carried humanity’s first long-range survey crew. Its telemetry ended without a distress call, collision report, or drive failure. That silence is why Vanguard I was commissioned.'
+            : 'The recovered recorder shows no collision damage and no crew aboard. Its final navigation solution points toward Alpha Centauri, as though something deliberately drew it out of Sol.',
+          choices:[{label:'Review my orders.',next:'mission'},{label:'Return to the main briefing.',next:'welcome'}]
+        }
+      }
+    }
+  };
   const MINERAL_CATEGORIES = [
     {name:'Common',value:1,weight:30,color:'#8fd8ff',materials:['Hydrogen','Helium','Carbon','Nitrogen','Silicon','Phosphorus','Selenium','Methane','Ammonia','Water']},
     {name:'Corrosive',value:2,weight:17,color:'#66ff6c',materials:['Oxygen','Fluorine','Sulfur','Chlorine','Bromine','Iodine']},
@@ -214,6 +269,8 @@
     day:1,
     fuel:100,
     maxFuel:100,
+    crew:50,
+    maxCrew:100,
     missionStage:0,
     transitionLock:0,
     messageTimer:0,
@@ -251,6 +308,8 @@
     installedModules:[],
     upgrades:{fuelTanks:0,dynamos:0,thrusters:0,turningJets:0,weapons:0},
     starbaseNotice:'',
+    communicationContact:null,
+    communicationNode:null,
     pickupNotices:[]
   };
 
@@ -312,6 +371,7 @@
     if(starbaseMenu) starbaseMenu.classList.add('hidden');
     if(shipyardScreen) shipyardScreen.classList.add('hidden');
     if(outfitScreen) outfitScreen.classList.add('hidden');
+    if(communicationScreen){communicationScreen.classList.add('hidden');communicationScreen.setAttribute('aria-hidden','true');}
   }
 
   function setStarbaseMenuVisible(visible){
@@ -321,6 +381,7 @@
     if(starbaseMenu) starbaseMenu.classList.toggle('hidden',!visible);
     if(shipyardScreen) shipyardScreen.classList.add('hidden');
     if(outfitScreen) outfitScreen.classList.add('hidden');
+    if(communicationScreen){communicationScreen.classList.add('hidden');communicationScreen.setAttribute('aria-hidden','true');}
     requestAnimationFrame(()=>{if(storyActive) resize();});
   }
 
@@ -522,6 +583,29 @@
     if(shipyardShipCost) shipyardShipCost.textContent=`${cost} CREDITS`;
     if(shipyardCredits) shipyardCredits.textContent=String(state.credits);
     if(shipyardBuild) shipyardBuild.disabled=state.shipyardBuilding||state.constructedShips.length>=MAX_ESCORTS||state.credits<cost;
+    const quote=crewRecruitQuote();
+    if(shipyardCrew) shipyardCrew.textContent=`${state.crew} / ${state.maxCrew}`;
+    if(shipyardRecruit){
+      shipyardRecruit.textContent=quote.amount?`RECRUIT ${quote.amount} CREW — ${quote.cost} CREDITS`:'CREW COMPLEMENT FULL';
+      shipyardRecruit.disabled=!quote.amount||state.credits<quote.cost;
+    }
+  }
+
+  function crewRecruitQuote(){
+    const amount=Math.min(CREW_RECRUIT_AMOUNT,Math.max(0,state.maxCrew-state.crew));
+    return {amount,cost:amount?Math.max(1,Math.ceil(amount/CREW_RECRUIT_AMOUNT*CREW_RECRUIT_COST)):0};
+  }
+
+  function recruitCrew(){
+    if(state.mode!=='shipyard') return false;
+    const quote=crewRecruitQuote();
+    if(!quote.amount){if(shipyardStatus) shipyardStatus.textContent='VANGUARD I CREW COMPLEMENT IS FULL.';return false;}
+    if(state.credits<quote.cost){if(shipyardStatus) shipyardStatus.textContent=`INSUFFICIENT CREDITS — ${quote.cost-state.credits} REQUIRED.`;return false;}
+    state.credits-=quote.cost;
+    state.crew+=quote.amount;
+    if(shipyardStatus) shipyardStatus.textContent=`${quote.amount} CREW ASSIGNED TO VANGUARD I.`;
+    updateShipyard();updateUi();
+    return true;
   }
 
   function animateShipyardPreview(){
@@ -544,6 +628,7 @@
     screen.classList.add('starbase-cinematic-active');
     if(starbaseMenu) starbaseMenu.classList.add('hidden');
     if(outfitScreen) outfitScreen.classList.add('hidden');
+    if(communicationScreen) communicationScreen.classList.add('hidden');
     if(shipyardScreen) shipyardScreen.classList.remove('hidden');
     renderShipyardBays();updateShipyard();animateShipyardPreview();playShipyardTheme();
     if(controlsLabel) controlsLabel.textContent='SELECT A HULL AND OPEN A CONSTRUCTION BAY';
@@ -606,6 +691,29 @@
     if(outfitStatTurn) outfitStatTurn.textContent=(BASE_TURN_RATE*(1+state.upgrades.turningJets*0.1)).toFixed(2);
     if(outfitStatWeapon) outfitStatWeapon.textContent=(1+state.upgrades.weapons*0.2).toFixed(2);
     if(outfitStatFuel) outfitStatFuel.textContent=String(state.maxFuel);
+    const quote=fuelPurchaseQuote();
+    if(outfitFuel) outfitFuel.textContent=`${Math.ceil(state.fuel)} / ${state.maxFuel}`;
+    if(outfitRefuel){
+      outfitRefuel.textContent=quote.amount?`BUY ${quote.amount} FUEL — ${quote.cost} CREDITS`:'FUEL TANKS FULL';
+      outfitRefuel.disabled=!quote.amount||state.credits<quote.cost;
+    }
+  }
+
+  function fuelPurchaseQuote(){
+    const amount=Math.min(FUEL_PURCHASE_AMOUNT,Math.max(0,Math.ceil(state.maxFuel-state.fuel)));
+    return {amount,cost:amount?Math.max(1,Math.ceil(amount/FUEL_PURCHASE_AMOUNT*FUEL_PURCHASE_COST)):0};
+  }
+
+  function buyFuel(){
+    if(state.mode!=='outfit') return false;
+    const quote=fuelPurchaseQuote();
+    if(!quote.amount){if(outfitStatus) outfitStatus.textContent='VANGUARD I FUEL TANKS ARE FULL.';return false;}
+    if(state.credits<quote.cost){if(outfitStatus) outfitStatus.textContent=`INSUFFICIENT CREDITS — ${quote.cost-state.credits} REQUIRED.`;return false;}
+    state.credits-=quote.cost;
+    state.fuel=Math.min(state.maxFuel,state.fuel+quote.amount);
+    if(outfitStatus) outfitStatus.textContent=`${quote.amount} FUEL TRANSFERRED TO VANGUARD I.`;
+    updateOutfit();updateUi();
+    return true;
   }
 
   function cycleOutfit(direction){
@@ -618,6 +726,7 @@
     screen.classList.add('starbase-cinematic-active');
     if(starbaseMenu) starbaseMenu.classList.add('hidden');
     if(shipyardScreen) shipyardScreen.classList.add('hidden');
+    if(communicationScreen) communicationScreen.classList.add('hidden');
     if(outfitScreen) outfitScreen.classList.remove('hidden');
     renderOutfitSlots();updateOutfit();playShipyardTheme();
     if(controlsLabel) controlsLabel.textContent='SELECT AND INSTALL FLAGSHIP MODULES';
@@ -646,6 +755,70 @@
     state.mode='starbase';setStarbaseMenuVisible(true);playStarbaseTheme();
     if(controlsLabel) controlsLabel.textContent='SELECT A STARBASE SERVICE';
     updateUi();
+  }
+
+  function communicationValue(value){
+    return typeof value==='function'?value():value;
+  }
+
+  function renderCommunicationNode(nodeId){
+    const contact=COMMUNICATION_CONTACTS[state.communicationContact];
+    if(!contact) return false;
+    const resolvedId=contact.nodes[nodeId]?nodeId:contact.greeting;
+    const node=contact.nodes[resolvedId];
+    state.communicationNode=resolvedId;
+    if(communicationText) communicationText.textContent=communicationValue(node.text);
+    if(communicationChoices){
+      communicationChoices.innerHTML='';
+      (node.choices||[]).forEach((choice,index)=>{
+        const button=document.createElement('button');
+        button.type='button';
+        button.textContent=`${index+1}. ${communicationValue(choice.label)}`;
+        button.addEventListener('click',()=>chooseCommunicationChoice(index));
+        communicationChoices.appendChild(button);
+      });
+    }
+    return true;
+  }
+
+  function chooseCommunicationChoice(index){
+    const contact=COMMUNICATION_CONTACTS[state.communicationContact];
+    const node=contact&&contact.nodes[state.communicationNode];
+    const choice=node&&node.choices&&node.choices[index];
+    if(!choice) return false;
+    if(typeof choice.effect==='function') choice.effect();
+    if(choice.action==='close') closeCommunication();
+    else renderCommunicationNode(choice.next||contact.greeting);
+    return true;
+  }
+
+  function openCommunication(contactId,nodeId){
+    const contact=COMMUNICATION_CONTACTS[contactId];
+    if(!contact) return false;
+    state.mode='communication';clearKeys();
+    state.communicationContact=contactId;
+    screen.classList.add('starbase-cinematic-active');
+    if(starbaseMenu) starbaseMenu.classList.add('hidden');
+    if(shipyardScreen) shipyardScreen.classList.add('hidden');
+    if(outfitScreen) outfitScreen.classList.add('hidden');
+    if(communicationScreen){communicationScreen.classList.remove('hidden');communicationScreen.setAttribute('aria-hidden','false');}
+    if(communicationLocation) communicationLocation.textContent=contact.location;
+    if(communicationName) communicationName.textContent=contact.name;
+    if(communicationTitle) communicationTitle.textContent=contact.title;
+    if(communicationPortrait){communicationPortrait.src=contact.portrait;communicationPortrait.alt=contact.alt;}
+    renderCommunicationNode(nodeId||contact.greeting);
+    if(controlsLabel) controlsLabel.textContent='SELECT A RESPONSE — ESC TO END TRANSMISSION';
+    updateUi();
+    return true;
+  }
+
+  function closeCommunication(){
+    if(state.mode!=='communication') return false;
+    if(communicationScreen){communicationScreen.classList.add('hidden');communicationScreen.setAttribute('aria-hidden','true');}
+    state.communicationContact=null;
+    state.communicationNode=null;
+    returnToStarbase();
+    return true;
   }
 
   function refreshPlanetOps(){
@@ -712,6 +885,8 @@
     state.day = 1;
     state.fuel = 100;
     state.maxFuel = 100;
+    state.crew = 50;
+    state.maxCrew = 100;
     state.missionStage = 0;
     state.transitionLock = 1.5;
     state.messageTimer = 8;
@@ -746,6 +921,8 @@
     state.installedModules = [];
     state.upgrades = {fuelTanks:0,dynamos:0,thrusters:0,turningJets:0,weapons:0};
     state.starbaseNotice = '';
+    state.communicationContact = null;
+    state.communicationNode = null;
     state.pickupNotices = [];
     Object.assign(state.player, {x:215,y:112,vx:0,vy:0,angle:-0.45});
     Object.assign(state.hyper, {x:0,y:0,vx:0,vy:0,angle:0});
@@ -1114,7 +1291,7 @@
       updateLanderTakeoff(dt);
     }else if(state.mode==='starmap'){
       if(interaction) interaction.classList.add('hidden');
-    }else if(state.mode === 'starbase'||state.mode==='shipyard'||state.mode==='outfit'){
+    }else if(state.mode === 'starbase'||state.mode==='shipyard'||state.mode==='outfit'||state.mode==='communication'){
       if(interaction) interaction.classList.add('hidden');
     }else{
       updateHyperspaceShip(dt);
@@ -1233,12 +1410,8 @@
 
   function handleStarbaseAction(event){
     const action=event.currentTarget.dataset.starbaseAction;
-    if(action==='commander'){
-      const briefing=state.missionStage===0
-        ? 'Your orders remain unchanged: locate Pioneer One and determine why it vanished.'
-        : 'The Pioneer One flight recorder confirms a course toward Alpha Centauri. Prepare for hyperspace.';
-      state.starbaseNotice=briefing;setLog('STARBASE COMMANDER',briefing,8);
-    }else if(action==='trade') tradeMinerals();
+    if(action==='commander') openCommunication('starbaseCommander');
+    else if(action==='trade') tradeMinerals();
     else if(action==='outfit') openOutfit();
     else if(action==='shipyard') openShipyard();
     else if(action==='depart') departStarbase();
@@ -1564,6 +1737,7 @@
     const fuelPercent=Math.max(0,Math.min(100,state.fuel/state.maxFuel*100));
     if(fuelFill) fuelFill.style.width = `${fuelPercent.toFixed(1)}%`;
     if(fuelLabel) fuelLabel.textContent = `${Math.ceil(state.fuel)}/${state.maxFuel}`;
+    if(crewLabel) crewLabel.textContent = `${state.crew}/${state.maxCrew}`;
     if(dayLabel) dayLabel.textContent = String(state.day).padStart(3,'0');
     if(!distanceLabel) return;
     if(state.mode==='starmap'){
@@ -1571,7 +1745,7 @@
       distanceLabel.textContent=`${Math.floor(fuelRange())} HS`;
       return;
     }
-    if(state.mode==='starbase'||state.mode==='shipyard'||state.mode==='outfit'){
+    if(state.mode==='starbase'||state.mode==='shipyard'||state.mode==='outfit'||state.mode==='communication'){
       if(distanceTitle) distanceTitle.textContent='CREDITS';
       distanceLabel.textContent=String(state.credits);
       return;
@@ -2316,7 +2490,7 @@
     else if(state.mode === 'planetDetail') drawPlanetDetail();
     else if(state.mode === 'landing') drawLanding();
     else if(state.mode === 'surface'||state.mode==='takeoff') drawSurface();
-    else if(state.mode === 'starbase'||state.mode==='shipyard'||state.mode==='outfit') drawStarbase();
+    else if(state.mode === 'starbase'||state.mode==='shipyard'||state.mode==='outfit'||state.mode==='communication') drawStarbase();
     else drawSystem();
     ctx.fillStyle = state.mode === 'hyperspace' ? 'rgba(255,20,10,0.035)' : 'rgba(0,40,90,0.035)';
     for(let y=0;y<viewHeight;y+=3) ctx.fillRect(0,y,viewWidth,1);
@@ -2339,6 +2513,11 @@
     }
     if(!storyActive) return;
     const key = event.key.toLowerCase();
+    if(state.mode==='communication'){
+      if(key==='escape') closeCommunication();
+      else if(/^[1-9]$/.test(key)) chooseCommunicationChoice(Number(key)-1);
+      event.preventDefault();return;
+    }
     if(state.mode==='shipyard'){
       if(event.key==='ArrowLeft'||key==='a') cycleShipyard(-1);
       else if(event.key==='ArrowRight'||key==='d') cycleShipyard(1);
@@ -2403,7 +2582,7 @@
     if(panel === 'starmap'){
       openStarmap();
     }
-    if(panel === 'manifest') setLog('MANIFEST', `Vanguard I — Crew: 50 — Escort vessels: ${state.constructedShips.length} — Fuel: ${Math.ceil(state.fuel)}/${state.maxFuel}.`, 5);
+    if(panel === 'manifest') setLog('MANIFEST', `Vanguard I — Crew: ${state.crew}/${state.maxCrew} — Escort vessels: ${state.constructedShips.length} — Fuel: ${Math.ceil(state.fuel)}/${state.maxFuel}.`, 5);
     if(panel === 'game') setLog('GAME', 'Story progress is retained while this page remains open. Full save slots will follow.', 5);
     if(panel === 'navigate'){
       const target = state.autopilotTarget?`${state.autopilotTarget.name} via autopilot`:(state.missionStage === 0 ? 'the Pioneer One signal' : 'Alpha Centauri via hyperspace');
@@ -2544,11 +2723,14 @@
   if(shipyardPrev) shipyardPrev.addEventListener('click',()=>cycleShipyard(-1));
   if(shipyardNext) shipyardNext.addEventListener('click',()=>cycleShipyard(1));
   if(shipyardBuild) shipyardBuild.addEventListener('click',buildSelectedShip);
+  if(shipyardRecruit) shipyardRecruit.addEventListener('click',recruitCrew);
   if(shipyardReturn) shipyardReturn.addEventListener('click',returnToStarbase);
   if(outfitPrev) outfitPrev.addEventListener('click',()=>cycleOutfit(-1));
   if(outfitNext) outfitNext.addEventListener('click',()=>cycleOutfit(1));
   if(outfitInstall) outfitInstall.addEventListener('click',installSelectedModule);
+  if(outfitRefuel) outfitRefuel.addEventListener('click',buyFuel);
   if(outfitReturn) outfitReturn.addEventListener('click',returnToStarbase);
+  if(communicationExit) communicationExit.addEventListener('click',closeCommunication);
   window.addEventListener('keydown',handleKeyDown,true);
   window.addEventListener('keyup',handleKeyUp);
   window.addEventListener('blur',clearKeys);
@@ -2559,7 +2741,7 @@
     start: startSystemGame,
     finishIntro,
     leave: leaveStory,
-    getState:()=>({mode:state.mode,currentSystem:state.currentSystem,planet:state.planet&&state.planet.name,missionStage:state.missionStage,fuel:state.fuel,maxFuel:state.maxFuel,fuelRange:fuelRange(),shipAngle:activeShip().angle,planetReveal:state.planetRevealTimer,planetRevealReady:state.planetRevealReady,spaceThemeActive:!spaceTheme.paused,spaceThemeTime:spaceTheme.currentTime,hyperspaceThemeActive:!hyperspaceTheme.paused,hyperspaceThemeTime:hyperspaceTheme.currentTime,orbitTheme:activeOrbitThemeIndex+1,orbitThemeActive:!!activeOrbitTheme&&!activeOrbitTheme.paused,autopilotTarget:state.autopilotTarget&&{...state.autopilotTarget},scans:{...state.scans},scanType:state.scanAnimation.type,mineralCargo:JSON.parse(JSON.stringify(state.mineralCargo)),cargoTradeValue:state.cargoTradeValue,credits:state.credits,constructedShips:state.constructedShips.map(ship=>({...ship})),installedModules:[...state.installedModules],upgrades:{...state.upgrades},landerAngle:state.lander.angle,landerCrew:state.landerCrew,landerStorageUsed:state.landerStorageUsed,landerHold:state.landerHold.map(item=>({...item})),landerShots:state.landerShots.length,landerDestroyed:state.landerDestroyed,remainingMinerals:state.surfaceNodes.filter(node=>node.type==='mineral'&&!node.collected).length,remainingLifeforms:state.surfaceNodes.filter(node=>node.type==='biological'&&!node.collected&&!node.defeated).length,biologicalData:state.surfaceNodes.filter(node=>node.type==='biological'&&!node.collected&&node.defeated).length,active:storyActive,intro:introRunning}),
+    getState:()=>({mode:state.mode,currentSystem:state.currentSystem,planet:state.planet&&state.planet.name,missionStage:state.missionStage,fuel:state.fuel,maxFuel:state.maxFuel,crew:state.crew,maxCrew:state.maxCrew,fuelRange:fuelRange(),shipAngle:activeShip().angle,planetReveal:state.planetRevealTimer,planetRevealReady:state.planetRevealReady,spaceThemeActive:!spaceTheme.paused,spaceThemeTime:spaceTheme.currentTime,hyperspaceThemeActive:!hyperspaceTheme.paused,hyperspaceThemeTime:hyperspaceTheme.currentTime,orbitTheme:activeOrbitThemeIndex+1,orbitThemeActive:!!activeOrbitTheme&&!activeOrbitTheme.paused,autopilotTarget:state.autopilotTarget&&{...state.autopilotTarget},scans:{...state.scans},scanType:state.scanAnimation.type,mineralCargo:JSON.parse(JSON.stringify(state.mineralCargo)),cargoTradeValue:state.cargoTradeValue,credits:state.credits,constructedShips:state.constructedShips.map(ship=>({...ship})),installedModules:[...state.installedModules],upgrades:{...state.upgrades},communicationContact:state.communicationContact,communicationNode:state.communicationNode,landerAngle:state.lander.angle,landerCrew:state.landerCrew,landerStorageUsed:state.landerStorageUsed,landerHold:state.landerHold.map(item=>({...item})),landerShots:state.landerShots.length,landerDestroyed:state.landerDestroyed,remainingMinerals:state.surfaceNodes.filter(node=>node.type==='mineral'&&!node.collected).length,remainingLifeforms:state.surfaceNodes.filter(node=>node.type==='biological'&&!node.collected&&!node.defeated).length,biologicalData:state.surfaceNodes.filter(node=>node.type==='biological'&&!node.collected&&node.defeated).length,active:storyActive,intro:introRunning}),
     setPlayer:(x,y)=>{ const ship=activeShip(); ship.x=x; ship.y=y; ship.vx=0; ship.vy=0; },
     enterPlanet:(name)=>{ const body=bodies.find(item=>item.name===String(name).toUpperCase()); if(body) enterPlanetSystem(body); },
     openPlanet:(name)=>{ const body=bodies.find(item=>item.name===String(name).toUpperCase()); if(body){enterPlanetSystem(body);enterPlanetDetail();} },
@@ -2578,10 +2760,16 @@
     advanceTakeoff:updateLanderTakeoff,
     dockStarbase:()=>{const earth=bodies.find(body=>body.name==='EARTH');if(earth){state.planet=earth;enterStarbase();}},
     grantCredits:(amount=500)=>{state.credits+=Math.max(0,Number(amount)||0);updateShipyard();updateOutfit();updateUi();return state.credits;},
+    setFuel:(amount)=>{state.fuel=Math.max(0,Math.min(state.maxFuel,Number(amount)||0));updateOutfit();updateUi();return state.fuel;},
+    setCrew:(amount)=>{state.crew=Math.max(0,Math.min(state.maxCrew,Math.floor(Number(amount)||0)));updateShipyard();updateUi();return state.crew;},
     openShipyard,
     buildSelectedShip,
     openOutfit,
     installSelectedModule,
+    buyFuel,
+    recruitCrew,
+    openCommunication,
+    closeCommunication,
     cycleOutfit,
     cycleShipyard,
     returnToStarbase,
