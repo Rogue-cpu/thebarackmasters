@@ -20,6 +20,7 @@
       <p class="menu-subtitle">Launch the simulator or reset the arena. Press Esc anytime to toggle this console.</p>
       <div class="menu-actions menu-actions-full">
         <button id="menu-start">SUPER MELEE</button>
+        <button id="menu-story">STORY</button>
         <button id="menu-multiplayer">MULTIPLAYER</button>
         <button id="menu-settings">SETTINGS</button>
         <button id="menu-credits">CREDITS</button>
@@ -27,6 +28,130 @@
       </div>
     </div>
   </div>
+  <div id="story-intro" class="story-intro hidden" aria-hidden="true">
+    <video id="story-intro-video" preload="auto" playsinline>
+      <source src="assets/story/intro.mp4?v=2" type="video/mp4">
+    </video>
+    <div class="story-intro-shade" aria-hidden="true"></div>
+    <div id="story-intro-status" class="story-intro-status">LOADING INTRO...</div>
+    <button id="story-intro-play" class="story-intro-play hidden" type="button">PLAY INTRO</button>
+    <div class="story-intro-skip">PRESS ANY KEY TO SKIP</div>
+  </div>
+  <main id="story-screen" class="story-screen hidden" aria-hidden="true">
+    <section class="story-system-view" aria-label="Solar system navigation">
+      <canvas id="story-canvas"></canvas>
+      <div class="story-system-label">
+        <span>SOL SYSTEM</span>
+        <small>LOCAL SPACE</small>
+      </div>
+      <div id="story-interaction" class="story-interaction hidden">PRESS E TO INVESTIGATE</div>
+      <div class="story-controls">W / ↑ THRUST&nbsp;&nbsp; A D / ← → TURN&nbsp;&nbsp; E INTERACT&nbsp;&nbsp; ESC MENU</div>
+      <nav id="starbase-cinematic-menu" class="starbase-cinematic-menu hidden" aria-label="Earth starbase">
+        <button type="button" data-starbase-action="commander">STARBASE COMMANDER</button>
+        <button type="button" data-starbase-action="outfit">OUTFIT STARSHIP</button>
+        <button type="button" data-starbase-action="shipyard">SHIPYARD</button>
+        <button type="button" data-starbase-action="depart">DEPART STARBASE</button>
+      </nav>
+      <section id="shipyard-screen" class="shipyard-screen hidden" aria-label="Starbase shipyard">
+        <header class="shipyard-header"><span>SHIPYARD</span><small>EARTH STARBASE</small></header>
+        <div class="shipyard-drydock">
+          <div class="shipyard-crane crane-left"></div>
+          <div class="shipyard-crane crane-right"></div>
+          <img id="shipyard-preview" class="shipyard-preview" alt="Selected ship hull">
+          <div class="shipyard-dock-name" id="shipyard-dock-name">SELECT HULL</div>
+        </div>
+        <div id="shipyard-bays" class="shipyard-bays" aria-label="Construction bays"></div>
+        <aside class="shipyard-catalog">
+          <h2>SHIPS</h2>
+          <button id="shipyard-prev" class="shipyard-cycle" type="button" aria-label="Previous hull">◀</button>
+          <div class="shipyard-selection">
+            <strong id="shipyard-ship-name">---</strong>
+            <span id="shipyard-ship-class">---</span>
+            <em id="shipyard-ship-cost">0 CREDITS</em>
+          </div>
+          <button id="shipyard-next" class="shipyard-cycle" type="button" aria-label="Next hull">▶</button>
+          <div class="shipyard-credit-readout">CREDITS <strong id="shipyard-credits">0</strong></div>
+          <div id="shipyard-status" class="shipyard-status">Select a hull for construction.</div>
+          <button id="shipyard-build" class="shipyard-build" type="button">BUILD SHIP</button>
+          <button id="shipyard-return" class="shipyard-return" type="button">RETURN TO STARBASE</button>
+        </aside>
+      </section>
+      <section id="outfit-screen" class="outfit-screen hidden" aria-label="Outfit starship">
+        <header class="outfit-header"><span>OUTFIT STARSHIP</span><small>VANGUARD I</small></header>
+        <div class="outfit-workbench">
+          <div class="outfit-ship-frame">
+            <div class="outfit-engine"></div>
+            <div class="outfit-spine" id="outfit-spine"></div>
+            <div class="outfit-command"></div>
+          </div>
+          <div id="outfit-slots" class="outfit-slots" aria-label="Installed module slots"></div>
+          <div class="outfit-stats">
+            <span>MAXIMUM VELOCITY <strong id="outfit-stat-speed">92</strong></span>
+            <span>TURNING RATE <strong id="outfit-stat-turn">2.25</strong></span>
+            <span>WEAPON POWER <strong id="outfit-stat-weapon">1.00</strong></span>
+            <span>MAXIMUM FUEL <strong id="outfit-stat-fuel">100</strong></span>
+          </div>
+        </div>
+        <aside class="outfit-catalog">
+          <h2>MODULES</h2>
+          <button id="outfit-prev" class="outfit-cycle" type="button" aria-label="Previous module">◀</button>
+          <div class="outfit-selection">
+            <strong id="outfit-module-name">FUEL TANK</strong>
+            <span id="outfit-module-description">Increases maximum fuel capacity.</span>
+            <em id="outfit-module-cost">20 CREDITS</em>
+          </div>
+          <button id="outfit-next" class="outfit-cycle" type="button" aria-label="Next module">▶</button>
+          <div class="outfit-credit-readout">CREDITS <strong id="outfit-credits">0</strong></div>
+          <div id="outfit-status" class="outfit-status">Select a module to install.</div>
+          <button id="outfit-install" class="outfit-install" type="button">INSTALL MODULE</button>
+          <button id="outfit-return" class="outfit-return" type="button">RETURN TO STARBASE</button>
+        </aside>
+      </section>
+    </section>
+    <aside class="story-sidebar" aria-label="Story command panel">
+      <header class="story-ship-name">VANGUARD I</header>
+      <section class="story-gauge-block">
+        <div class="story-gauge-heading"><span>FUEL</span><strong id="story-fuel-label">100%</strong></div>
+        <div class="story-fuel-track"><span id="story-fuel-fill"></span></div>
+      </section>
+      <section class="story-ship-status">
+        <div class="story-fleet-slots" aria-label="Fleet escort slots">
+          <span class="active"></span><span></span><span></span><span></span>
+          <span></span><span></span><span></span><span></span>
+        </div>
+        <div class="story-ship-schematic" aria-label="Vanguard ship schematic">
+          <i class="ship-wing left"></i><i class="ship-core"></i><i class="ship-wing right"></i>
+        </div>
+      </section>
+      <section class="story-crew-readout"><span>CREW</span><strong>50</strong></section>
+      <section class="story-date-readout">MISSION DAY <strong id="story-day">001</strong></section>
+      <section class="story-mission-panel">
+        <div class="story-panel-kicker">PRIMARY DIRECTIVE</div>
+        <h2 id="story-mission-title">THE SILENT PIONEER</h2>
+        <p id="story-mission-text">Travel to the unidentified signal and investigate humanity's missing first spacecraft.</p>
+        <div class="story-distance"><span id="story-distance-label">SIGNAL RANGE</span><strong id="story-distance">---</strong></div>
+      </section>
+      <section id="story-log" class="story-log" aria-live="polite">
+        <span>COMMAND</span>
+        <p>Vanguard I, find out why our first ship never came home.</p>
+      </section>
+      <nav class="story-nav-menu" aria-label="Ship computer">
+        <button type="button" data-story-panel="starmap">STARMAP</button>
+        <button type="button" data-story-panel="manifest">MANIFEST</button>
+        <button type="button" data-story-panel="game">GAME</button>
+        <button type="button" data-story-panel="navigate">NAVIGATE</button>
+      </nav>
+      <nav id="planet-ops-menu" class="planet-ops-menu hidden" aria-label="Planet operations">
+        <button type="button" data-planet-action="mineral">MINERAL SCAN</button>
+        <button type="button" data-planet-action="energy">ENERGY SCAN</button>
+        <button type="button" data-planet-action="biological">BIOLOGICAL SCAN</button>
+        <button type="button" data-planet-action="autoscan">AUTOSCAN</button>
+        <button type="button" data-planet-action="dispatch">DISPATCH LANDER</button>
+        <button type="button" data-planet-action="exit">EXIT PLANET</button>
+      </nav>
+      <button id="story-return-menu" class="story-return-menu" type="button">RETURN TO MAIN MENU</button>
+    </aside>
+  </main>
   <div id="ui">
     <!-- Player panel -->
     <div id="player-panel" class="side-panel">
@@ -326,6 +451,7 @@
     </div>
   </div>
   <script src="main.js"></script>
-<script src="mainMenuMusic.js"></script>
+  <script src="story.js"></script>
+  <script src="mainMenuMusic.js"></script>
 </body>
 </html>

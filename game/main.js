@@ -562,23 +562,31 @@ const HORROR_BOSS_TYPE = {
 
 function ensureTypeSpritesLoaded(type){
   if(!type || !type.id) return;
+  const resolveSpriteSrc = (src)=>{
+    if(!src) return src;
+    try{
+      return encodeURI(src);
+    }catch(err){
+      return src;
+    }
+  };
   if(type.spriteFile && !SHIP_SPRITES[type.id]){
     const img = new Image();
     img.onload = ()=>{ SHIP_SPRITES[type.id] = img; };
     img.onerror = ()=>{};
-    img.src = type.spriteFile;
+    img.src = resolveSpriteSrc(type.spriteFile);
   }
   if(type.spriteFileFire && type.fireSpriteId && !SHIP_SPRITES[type.fireSpriteId]){
     const img = new Image();
     img.onload = ()=>{ SHIP_SPRITES[type.fireSpriteId] = img; };
     img.onerror = ()=>{};
-    img.src = type.spriteFileFire;
+    img.src = resolveSpriteSrc(type.spriteFileFire);
   }
   if(type.fighterSpriteFile && type.fighterSpriteId && !SHIP_SPRITES[type.fighterSpriteId]){
     const img = new Image();
     img.onload = ()=>{ SHIP_SPRITES[type.fighterSpriteId] = img; };
     img.onerror = ()=>{};
-    img.src = type.fighterSpriteFile;
+    img.src = resolveSpriteSrc(type.fighterSpriteFile);
   }
 
   if(type.id === 'cabal' && !SHIP_SPRITES[CABAL_DEPLOYED_SPRITE_KEY]){
@@ -1209,7 +1217,7 @@ const SHIP_TYPES = [
       }
     }
   }),
-  createPlaceholderShip({id:'imperial', name:'Imperial', classLabel:'Star Destroyer', color:'#b7c8de', spriteFile:'../Imperial.png', fighterSpriteId:'imperial_tie', fighterSpriteFile:'../Tie Fighter.png',
+  createPlaceholderShip({id:'imperial', name:'Imperial', classLabel:'Star Destroyer', color:'#b7c8de', spriteFile:'../Imperial.png', fighterSpriteId:'imperial_tie', fighterSpriteFile:'../Tie%20Fighter.png',
     size:44,
     speed:84,
     hp:360,
@@ -1229,21 +1237,29 @@ const SHIP_TYPES = [
         hp:18,
         speed:350,
         accel:860,
-        size:9,
+        size:12,
         fireInterval:0.28,
         projectileDamage:5,
         projectileSpeed:620,
         projectileTtl:1.1,
         returnTime:18,
         spriteKey:'imperial_tie',
-        spriteScale:0.075,
+        spriteFile:'../Tie Fighter.png',
+        sfxRaceId:'imperial_tie',
+        behavior:'imperialTie',
+        flybyRadius:118,
+        flybyCooldown:1.15,
+        engageRange:168,
+        orbitRadius:104,
+        orbitJitter:22,
+        spriteScale:0.11,
         spriteAngleOffset:-Math.PI/2,
         projectileStyle:'plasmaBolt',
         projectileLength:18,
         projectileRadius:3,
-        core:[170,255,170],
-        mid:[70,210,90],
-        tail:[30,110,35]
+        core:[255,255,255],
+        mid:[215,225,240],
+        tail:[110,130,155]
       }
     },
     projectile:{
@@ -1308,7 +1324,7 @@ const SHIP_TYPES = [
     speed:90,
     hp:355,
     fireRate:520,
-    spriteAngleOffset:0,
+    spriteAngleOffset:Math.PI,
     overlayRotation:270,
     spriteScale:0.25,
     trailColors:{core:[170,220,255],mid:[70,130,180]},
@@ -5218,6 +5234,50 @@ function ensureSfxForRace(raceId){
         '../Terran Attack 4.mp3',
         '../Terran Attack 5.mp3',
         '../Terran Attack 6.mp3'
+      ].map(src=>{
+        const a = new Audio();
+        a.preload = 'auto';
+        a.src = src;
+        try{ a.load(); }catch(err){}
+        return a;
+      });
+      store[cue] = variants;
+      return;
+    }
+    if(raceId === 'imperial' && cue === 'special'){
+      const variants = [
+        '../tie-fighter-flyby-3.mp3',
+        '../fly-by-6.mp3',
+        '../tie-fighter-roar.mp3'
+      ].map(src=>{
+        const a = new Audio();
+        a.preload = 'auto';
+        a.src = src;
+        try{ a.load(); }catch(err){}
+        return a;
+      });
+      store[cue] = variants;
+      return;
+    }
+    if(raceId === 'imperial_tie' && cue === 'fire'){
+      const variants = [
+        '../blast-3.mp3',
+        '../lego-star-wars-tie-fighter-blaster2.mp3'
+      ].map(src=>{
+        const a = new Audio();
+        a.preload = 'auto';
+        a.src = src;
+        try{ a.load(); }catch(err){}
+        return a;
+      });
+      store[cue] = variants;
+      return;
+    }
+    if(raceId === 'imperial_tie' && cue === 'fly'){
+      const variants = [
+        '../tie-fighter-flyby-3.mp3',
+        '../fly-by-6.mp3',
+        '../tie-fighter-roar.mp3'
       ].map(src=>{
         const a = new Audio();
         a.preload = 'auto';
@@ -12209,7 +12269,7 @@ function createPickleFighter(parent, spec, conf, index, total, hpRestore){
   const launchDist = parent.size * 0.9;
   const fighter = {
     id: fighterIdCounter++,
-    kind: 'pickleHive',
+    kind: conf.behavior === 'imperialTie' ? 'imperialTie' : 'pickleHive',
     spec,
     parent,
     team: parent.team,
@@ -12227,6 +12287,10 @@ function createPickleFighter(parent, spec, conf, index, total, hpRestore){
     projectileDamage: conf.projectileDamage || 4,
     projectileSpeed: conf.projectileSpeed || 420,
     projectileTtl: conf.projectileTtl || 1.4,
+    engageRange: conf.engageRange || 150,
+    orbitRadius: conf.orbitRadius || 92,
+    orbitJitter: conf.orbitJitter || 18,
+    orbitDir: Math.random() < 0.5 ? -1 : 1,
     state: 'attack',
     age: 0,
     maxFlightTime: conf.returnTime || 15,
@@ -12234,6 +12298,12 @@ function createPickleFighter(parent, spec, conf, index, total, hpRestore){
     restoreAmount: hpRestore != null ? hpRestore : 0,
     alive: true,
     spriteKey: conf.spriteKey || parent.type.fighterSpriteId || null,
+    spriteFile: conf.spriteFile || parent.type.fighterSpriteFile || null,
+    spriteImage: null,
+    sfxRaceId: conf.sfxRaceId || parent.type.fighterSpriteId || parent.type.id,
+    flybyRadius: conf.flybyRadius || 0,
+    flybyCooldown: conf.flybyCooldown || 1.2,
+    flybySoundCooldown: 0,
     spriteScale: conf.spriteScale || 0.08,
     spriteAngleOffset: conf.spriteAngleOffset != null ? conf.spriteAngleOffset : -Math.PI / 2,
     colorCore: conf.core || [235,255,210],
@@ -12244,6 +12314,12 @@ function createPickleFighter(parent, spec, conf, index, total, hpRestore){
     projectileRadius: conf.projectileRadius || 3,
     projectileWidth: conf.projectileWidth || 2.5
   };
+  if(fighter.spriteFile){
+    const img = new Image();
+    img.onload = ()=>{ fighter.spriteImage = img; };
+    img.onerror = ()=>{};
+    img.src = encodeURI(fighter.spriteFile);
+  }
   fighters.push(fighter);
   return fighter;
 }
@@ -12312,6 +12388,9 @@ function updateFighters(dt){
       case 'protossInterceptor':
         updateProtossInterceptor(f, dt);
         break;
+      case 'imperialTie':
+        updateImperialTieFighter(f, dt);
+        break;
       case 'pickleHive':
       default:
         updatePickleFighter(f, dt);
@@ -12323,6 +12402,7 @@ function updateFighters(dt){
 
 function updatePickleFighter(f, dt){
   f.age += dt;
+  f.flybySoundCooldown = Math.max(0, (f.flybySoundCooldown || 0) - dt);
   if(!f.parent || f.parent.hp <= 0) f.state = 'returning';
   if(f.state === 'attack' && f.age >= f.maxFlightTime) f.state = 'returning';
   if(f.state === 'attack'){
@@ -12375,6 +12455,23 @@ function updatePickleFighter(f, dt){
   f.vy *= drag;
   f.x += f.vx * dt;
   f.y += f.vy * dt;
+  maybePlayFighterFlyby(f);
+}
+
+function maybePlayFighterFlyby(fighter){
+  if(!fighter || !fighter.alive) return;
+  const raceId = fighter.sfxRaceId || (fighter.parent ? fighter.parent.type.id : null);
+  if(raceId !== 'imperial_tie') return;
+  if((fighter.flybySoundCooldown || 0) > 0) return;
+  const radius = Math.max(40, fighter.flybyRadius || 0);
+  if(radius <= 0) return;
+  const nearbyShip = ships.find(ship=>{
+    if(!ship || ship.hp <= 0 || ship.isWarping()) return false;
+    return Math.hypot(ship.x - fighter.x, ship.y - fighter.y) <= radius;
+  });
+  if(!nearbyShip) return;
+  fighter.flybySoundCooldown = Math.max(0.35, fighter.flybyCooldown || 1.2);
+  playSfx('fly', 'imperial_tie');
 }
 
 function steerFighterVelocity(fighter, desiredAngle, accel, dt, maxSpeed){
@@ -12435,6 +12532,58 @@ function updateProtossInterceptor(f, dt){
   f.vy *= drag;
   f.x += f.vx * dt;
   f.y += f.vy * dt;
+}
+
+function updateImperialTieFighter(f, dt){
+  f.age += dt;
+  f.flybySoundCooldown = Math.max(0, (f.flybySoundCooldown || 0) - dt);
+  if(!f.parent || f.parent.hp <= 0){
+    spawnFighterPop(f);
+    retireFighter(f);
+    return;
+  }
+  const target = getNearestEnemyShip(f.team, f);
+  f.target = target || null;
+  let desiredAngle = Math.atan2(f.parent.y - f.y, f.parent.x - f.x);
+  let accel = f.accel || 860;
+  let maxSpeed = f.speed || 350;
+
+  if(target){
+    const dx = target.x - f.x;
+    const dy = target.y - f.y;
+    const dist = Math.hypot(dx, dy) || 1;
+    const towardAngle = Math.atan2(dy, dx);
+    const orbitRadius = Math.max(52, (f.orbitRadius || 104) + Math.sin(f.age * 3.1 + f.orbitPhase) * (f.orbitJitter || 22));
+    const tangentAngle = towardAngle + f.orbitDir * (Math.PI / 2);
+    const radiusError = dist - orbitRadius;
+    desiredAngle = tangentAngle + Math.max(-0.95, Math.min(0.95, radiusError / Math.max(44, orbitRadius))) * 0.78;
+    if(dist > orbitRadius * 1.7){
+      desiredAngle = desiredAngle + normalizeAngle(towardAngle - desiredAngle) * 0.62;
+      maxSpeed *= 1.08;
+    }
+    f.fireCooldown -= dt;
+    if(dist <= (f.engageRange || 168) && f.fireCooldown <= 0){
+      fireImperialTieShot(f, towardAngle);
+      f.fireCooldown = f.fireInterval || 0.28;
+    }
+  } else {
+    const dx = f.parent.x - f.x;
+    const dy = f.parent.y - f.y;
+    const towardAngle = Math.atan2(dy, dx);
+    const dist = Math.hypot(dx, dy) || 1;
+    const orbitRadius = Math.max(30, (f.parent.size || 24) * 1.45);
+    const tangentAngle = towardAngle + f.orbitDir * (Math.PI / 2);
+    desiredAngle = tangentAngle + Math.max(-0.82, Math.min(0.82, (dist - orbitRadius) / orbitRadius)) * 0.62;
+    maxSpeed *= 0.94;
+  }
+
+  steerFighterVelocity(f, desiredAngle, accel, dt, maxSpeed);
+  const drag = target ? 0.996 : 0.99;
+  f.vx *= drag;
+  f.vy *= drag;
+  f.x += f.vx * dt;
+  f.y += f.vy * dt;
+  maybePlayFighterFlyby(f);
 }
 
 function firePickleFighterShot(fighter, angle){
@@ -12505,6 +12654,42 @@ function fireProtossInterceptorShot(fighter, angle){
     size: 0.75,
     core: fighter.colorCore || [255,240,180],
     mid: fighter.colorMid || [120,210,255]
+  });
+}
+
+function fireImperialTieShot(fighter, angle){
+  const speed = fighter.projectileSpeed || 620;
+  bullets.push({
+    x: fighter.x,
+    y: fighter.y,
+    dx: Math.cos(angle) * speed,
+    dy: Math.sin(angle) * speed,
+    team: fighter.team,
+    ttl: fighter.projectileTtl || 1.1,
+    damage: fighter.projectileDamage || 5,
+    ownerShip: fighter.parent || null,
+    raceId: 'imperial_tie',
+    projectile:{
+      style:'plasmaBolt',
+      length:fighter.projectileLength || 18,
+      radius:fighter.projectileRadius || 3,
+      width:fighter.projectileWidth || 2.5,
+      core: fighter.colorCore || [170,255,170],
+      mid: fighter.colorMid || [70,210,90],
+      tail: fighter.colorTail || [30,110,35]
+    },
+    seed: Math.random() * Math.PI * 2
+  });
+  playSfx('fire', 'imperial_tie');
+  particles.push({
+    x: fighter.x,
+    y: fighter.y,
+    vx: Math.cos(angle + Math.PI) * 52 + (Math.random() - 0.5) * 24,
+    vy: Math.sin(angle + Math.PI) * 52 + (Math.random() - 0.5) * 24,
+    life: 0.18,
+    size: 0.72,
+    core: fighter.colorCore || [170,255,170],
+    mid: fighter.colorMid || [70,210,90]
   });
 }
 
@@ -12580,10 +12765,11 @@ function spawnFighterPop(fighter){
       vy: (Math.random()-0.5)*150,
       life: 0.25 + Math.random()*0.2,
       size: 0.6 + Math.random()*0.4,
-      core: fighter.colorCore,
-      mid: fighter.colorMid
-    });
-  }
+    core: fighter.colorCore,
+    mid: fighter.colorMid
+  });
+  playSfx('fire', fighter.sfxRaceId || (fighter.parent ? fighter.parent.type.id : 'pickle'));
+}
 }
 
 function drawFighters(ctx){
@@ -12594,22 +12780,33 @@ function drawFighters(ctx){
     ctx.save();
     ctx.translate(f.x, f.y);
     const angle = Math.atan2(f.vy, f.vx) || 0;
-    const sprite = f.spriteKey ? SHIP_SPRITES[f.spriteKey] : null;
+    const sprite = f.spriteImage || (f.spriteKey ? SHIP_SPRITES[f.spriteKey] : null);
     if(sprite){
       ctx.rotate(angle + (f.spriteAngleOffset || 0));
       const scale = f.spriteScale || 0.08;
       const w = sprite.width * scale;
       const h = sprite.height * scale;
       ctx.globalCompositeOperation = 'lighter';
-      const glow = ctx.createRadialGradient(0,0,0,0,0,Math.max(w, h) * 0.7);
-      glow.addColorStop(0, rgba(f.colorCore || [255,255,255], 0.32));
+      const glowRadius = f.kind === 'imperialTie' ? Math.max(w, h) * 0.55 : Math.max(w, h) * 0.7;
+      const glowAlpha = f.kind === 'imperialTie' ? 0.18 : 0.32;
+      const glow = ctx.createRadialGradient(0,0,0,0,0,glowRadius);
+      glow.addColorStop(0, rgba(f.colorCore || [255,255,255], glowAlpha));
       glow.addColorStop(1, 'rgba(0,0,0,0)');
       ctx.fillStyle = glow;
       ctx.beginPath();
-      ctx.arc(0, 0, Math.max(w, h) * 0.5, 0, Math.PI * 2);
+      ctx.arc(0, 0, f.kind === 'imperialTie' ? Math.max(w, h) * 0.34 : Math.max(w, h) * 0.5, 0, Math.PI * 2);
       ctx.fill();
       ctx.globalCompositeOperation = 'source-over';
+      if(f.kind === 'imperialTie'){
+        ctx.globalAlpha = 0.98;
+        ctx.shadowColor = 'rgba(255,255,255,0.08)';
+        ctx.shadowBlur = 2;
+      }
       ctx.drawImage(sprite, -w / 2, -h / 2, w, h);
+      if(f.kind === 'imperialTie'){
+        ctx.shadowBlur = 0;
+        ctx.globalAlpha = 1;
+      }
     } else {
       ctx.rotate(angle);
       const bodyLen = Math.max(14, f.size*2.1);

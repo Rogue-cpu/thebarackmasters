@@ -1,11 +1,11 @@
 // Play main menu music until a battle is started
 let mainMenuMusic;
 let musicStarted = false;
-const AUDIO_SETTINGS_KEY = 'bm_audio_settings';
+const MENU_AUDIO_SETTINGS_KEY = 'bm_audio_settings';
 
 function getMenuMusicVolume() {
   try {
-    const raw = localStorage.getItem(AUDIO_SETTINGS_KEY);
+    const raw = localStorage.getItem(MENU_AUDIO_SETTINGS_KEY);
     if (!raw) return 0.7;
     const parsed = JSON.parse(raw);
     const music = Number(parsed && parsed.music);
@@ -31,6 +31,7 @@ window.setMainMenuMusicVolume = function setMainMenuMusicVolume(volume) {
 };
 
 function playMainMenuMusic() {
+  if (document.body && document.body.classList.contains('story-active')) return;
   if (!mainMenuMusic) {
     mainMenuMusic = new Audio('../main menu.mp3');
     mainMenuMusic.loop = true;
@@ -65,7 +66,7 @@ window.addEventListener('DOMContentLoaded', () => {
   tryStartMenuMusic();
   // Fallback: play on any user interaction, and keep listening until it works
   const gestureHandler = () => {
-    if (!musicStarted) {
+    if (!musicStarted && !document.body.classList.contains('story-active')) {
       playMainMenuMusic();
     }
     if (musicStarted) {
