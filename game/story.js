@@ -164,6 +164,7 @@
   const generatedSystemCache = {};
   const flagshipSprite = new Image();
   flagshipSprite.src = 'assets/story/vanguard-flagship.png';
+  const FLAGSHIP_SPRITE_ROTATION = Math.PI/2;
   const shipyardTheme = new Audio('assets/music/shipyard-theme.mp3');
   shipyardTheme.loop = true;
   const starbaseTheme = new Audio('assets/music/starbase-theme.mp3');
@@ -1689,7 +1690,7 @@
     const displayAngle = Math.atan2(Math.sin(ship.angle)*tilt,Math.cos(ship.angle));
     const width=pixelWidth/scale;
     const height=width*(flagshipSprite.naturalHeight&&flagshipSprite.naturalWidth?flagshipSprite.naturalHeight/flagshipSprite.naturalWidth:2/3);
-    ctx.save();ctx.translate(ship.x,ship.y);ctx.scale(1,1/tilt);ctx.rotate(displayAngle+.64);
+    ctx.save();ctx.translate(ship.x,ship.y);ctx.scale(1,1/tilt);ctx.rotate(displayAngle+FLAGSHIP_SPRITE_ROTATION);
     if(keys.thrust){
       const flame=ctx.createLinearGradient(-width*.64,0,-width*.18,0);
       flame.addColorStop(0,'rgba(42,151,255,0)');flame.addColorStop(.62,'rgba(36,169,255,.68)');flame.addColorStop(1,'rgba(206,250,255,.95)');
@@ -1700,7 +1701,7 @@
       ctx.shadowColor=color;ctx.shadowBlur=10/scale;
       ctx.drawImage(flagshipSprite,-width/2,-height/2,width,height);
     }else{
-      ctx.rotate(-.64);ctx.shadowColor=color;ctx.shadowBlur=10/scale;ctx.fillStyle=color;
+      ctx.rotate(-FLAGSHIP_SPRITE_ROTATION);ctx.shadowColor=color;ctx.shadowBlur=10/scale;ctx.fillStyle=color;
       ctx.beginPath();ctx.moveTo(13/scale,0);ctx.lineTo(-9/scale,-7/scale);ctx.lineTo(-5/scale,0);ctx.lineTo(-9/scale,7/scale);ctx.closePath();ctx.fill();
     }
     ctx.restore();
