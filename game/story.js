@@ -67,6 +67,7 @@
   const EARTH_STARBASE = {x:142,y:-58,radius:18};
   const PLANET_SCAN_DURATION = 2.8;
   const HYPER_FUEL_PER_UNIT = 0.12;
+  const BASE_TURN_RATE = 0.82;
   const STARMAP_BOUNDS = {left:-2050,right:1950,top:-1500,bottom:1500};
   const SCAN_COLORS = {mineral:'#ff3624',energy:'#b84dff',biological:'#3dff62'};
   const SCAN_RGB = {mineral:'255,54,36',energy:'184,77,255',biological:'61,255,98'};
@@ -455,7 +456,7 @@
     if(outfitCredits) outfitCredits.textContent=String(state.credits);
     if(outfitInstall) outfitInstall.disabled=state.installedModules.length>=MAX_MODULES||state.credits<module.cost;
     if(outfitStatSpeed) outfitStatSpeed.textContent=(92*(1+state.upgrades.thrusters*0.1)).toFixed(0);
-    if(outfitStatTurn) outfitStatTurn.textContent=(2.25*(1+state.upgrades.turningJets*0.1)).toFixed(2);
+    if(outfitStatTurn) outfitStatTurn.textContent=(BASE_TURN_RATE*(1+state.upgrades.turningJets*0.1)).toFixed(2);
     if(outfitStatWeapon) outfitStatWeapon.textContent=(1+state.upgrades.weapons*0.2).toFixed(2);
     if(outfitStatFuel) outfitStatFuel.textContent=String(state.maxFuel);
   }
@@ -769,8 +770,8 @@
     const manual = keys.thrust || keys.reverse || keys.left || keys.right;
     const turnMultiplier=1+state.upgrades.turningJets*0.1;
     const thrustMultiplier=1+state.upgrades.thrusters*0.1;
-    if(keys.left) ship.angle -= 2.25 * turnMultiplier * dt;
-    if(keys.right) ship.angle += 2.25 * turnMultiplier * dt;
+    if(keys.left) ship.angle -= BASE_TURN_RATE * turnMultiplier * dt;
+    if(keys.right) ship.angle += BASE_TURN_RATE * turnMultiplier * dt;
     const drive = keys.thrust ? 1 : (keys.reverse ? -0.42 : 0);
     if(drive && state.fuel > 0){
       const acceleration = (hyper ? 76 : 64)*thrustMultiplier;
@@ -1687,7 +1688,7 @@
   }
 
   function drawPlayer(ship, scale, color, tilt=1, pixelWidth=50){
-    const displayAngle = Math.atan2(Math.sin(ship.angle)*tilt,Math.cos(ship.angle));
+    const displayAngle = ship.angle;
     const width=pixelWidth/scale;
     const height=width*(flagshipSprite.naturalHeight&&flagshipSprite.naturalWidth?flagshipSprite.naturalHeight/flagshipSprite.naturalWidth:2/3);
     ctx.save();ctx.translate(ship.x,ship.y);ctx.scale(1,1/tilt);ctx.rotate(displayAngle+FLAGSHIP_SPRITE_ROTATION);
@@ -2050,7 +2051,7 @@
     start: startSystemGame,
     finishIntro,
     leave: leaveStory,
-    getState:()=>({mode:state.mode,currentSystem:state.currentSystem,planet:state.planet&&state.planet.name,missionStage:state.missionStage,fuel:state.fuel,maxFuel:state.maxFuel,fuelRange:fuelRange(),autopilotTarget:state.autopilotTarget&&{...state.autopilotTarget},scans:{...state.scans},scanType:state.scanAnimation.type,mineralCargo:JSON.parse(JSON.stringify(state.mineralCargo)),cargoTradeValue:state.cargoTradeValue,credits:state.credits,constructedShips:state.constructedShips.map(ship=>({...ship})),installedModules:[...state.installedModules],upgrades:{...state.upgrades},landerAngle:state.lander.angle,remainingMinerals:state.surfaceNodes.filter(node=>node.type==='mineral'&&!node.collected).length,active:storyActive,intro:introRunning}),
+    getState:()=>({mode:state.mode,currentSystem:state.currentSystem,planet:state.planet&&state.planet.name,missionStage:state.missionStage,fuel:state.fuel,maxFuel:state.maxFuel,fuelRange:fuelRange(),shipAngle:activeShip().angle,autopilotTarget:state.autopilotTarget&&{...state.autopilotTarget},scans:{...state.scans},scanType:state.scanAnimation.type,mineralCargo:JSON.parse(JSON.stringify(state.mineralCargo)),cargoTradeValue:state.cargoTradeValue,credits:state.credits,constructedShips:state.constructedShips.map(ship=>({...ship})),installedModules:[...state.installedModules],upgrades:{...state.upgrades},landerAngle:state.lander.angle,remainingMinerals:state.surfaceNodes.filter(node=>node.type==='mineral'&&!node.collected).length,active:storyActive,intro:introRunning}),
     setPlayer:(x,y)=>{ const ship=activeShip(); ship.x=x; ship.y=y; ship.vx=0; ship.vy=0; },
     enterPlanet:(name)=>{ const body=bodies.find(item=>item.name===String(name).toUpperCase()); if(body) enterPlanetSystem(body); },
     openPlanet:(name)=>{ const body=bodies.find(item=>item.name===String(name).toUpperCase()); if(body){enterPlanetSystem(body);enterPlanetDetail();} },
