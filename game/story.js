@@ -358,13 +358,14 @@
     return ['system','planet','hyperspace','starmap'].includes(state.mode);
   }
 
-  function playSpaceTheme(){
+  function playSpaceTheme(restart=false){
     if(!isSpaceMusicMode()) return;
     stopShipyardTheme();
     stopStarbaseTheme();
     stopOrbitTheme();
     stopSpaceTheme();
     try{
+      if(restart) spaceTheme.currentTime=0;
       spaceTheme.volume=typeof getMusicVolume==='function'?getMusicVolume(.62):.52;
       const attempt=spaceTheme.play();
       if(attempt&&typeof attempt.catch==='function') attempt.catch(()=>{});
@@ -1123,6 +1124,7 @@
     const exitAngle = Math.atan2(state.planetShip.y,state.planetShip.x);
     state.mode = 'system';
     stopOrbitTheme();
+    playSpaceTheme(true);
     Object.assign(state.player,{
       x:position.x+Math.cos(exitAngle)*Math.max(24,body.radius+15),
       y:position.y+Math.sin(exitAngle)*Math.max(24,body.radius+15),
@@ -1233,7 +1235,7 @@
     if(!state.planet) return;
     state.mode = 'planet';
     stopOrbitTheme();
-    playSpaceTheme();
+    playSpaceTheme(true);
     Object.assign(state.planetShip,{x:0,y:82,vx:0,vy:24,angle:Math.PI/2});
     state.transitionLock = 1.8;
     setPlanetOpsVisible(false);
@@ -1492,6 +1494,7 @@
     state.mode = 'system';
     state.currentSystem=name;
     state.autopilotTarget=null;
+    playSpaceTheme(true);
     Object.assign(state.player, {
       x:Math.cos(angle)*720, y:Math.sin(angle)*720,
       vx:Math.cos(angle)*-18, vy:Math.sin(angle)*-18, angle:angle+Math.PI
@@ -2439,7 +2442,7 @@
     start: startSystemGame,
     finishIntro,
     leave: leaveStory,
-    getState:()=>({mode:state.mode,currentSystem:state.currentSystem,planet:state.planet&&state.planet.name,missionStage:state.missionStage,fuel:state.fuel,maxFuel:state.maxFuel,fuelRange:fuelRange(),shipAngle:activeShip().angle,planetReveal:state.planetRevealTimer,planetRevealReady:state.planetRevealReady,spaceThemeActive:!spaceTheme.paused,orbitTheme:activeOrbitThemeIndex+1,orbitThemeActive:!!activeOrbitTheme&&!activeOrbitTheme.paused,autopilotTarget:state.autopilotTarget&&{...state.autopilotTarget},scans:{...state.scans},scanType:state.scanAnimation.type,mineralCargo:JSON.parse(JSON.stringify(state.mineralCargo)),cargoTradeValue:state.cargoTradeValue,credits:state.credits,constructedShips:state.constructedShips.map(ship=>({...ship})),installedModules:[...state.installedModules],upgrades:{...state.upgrades},landerAngle:state.lander.angle,landerCrew:state.landerCrew,landerStorageUsed:state.landerStorageUsed,landerHold:state.landerHold.map(item=>({...item})),landerShots:state.landerShots.length,landerDestroyed:state.landerDestroyed,remainingMinerals:state.surfaceNodes.filter(node=>node.type==='mineral'&&!node.collected).length,remainingLifeforms:state.surfaceNodes.filter(node=>node.type==='biological'&&!node.collected&&!node.defeated).length,biologicalData:state.surfaceNodes.filter(node=>node.type==='biological'&&!node.collected&&node.defeated).length,active:storyActive,intro:introRunning}),
+    getState:()=>({mode:state.mode,currentSystem:state.currentSystem,planet:state.planet&&state.planet.name,missionStage:state.missionStage,fuel:state.fuel,maxFuel:state.maxFuel,fuelRange:fuelRange(),shipAngle:activeShip().angle,planetReveal:state.planetRevealTimer,planetRevealReady:state.planetRevealReady,spaceThemeActive:!spaceTheme.paused,spaceThemeTime:spaceTheme.currentTime,orbitTheme:activeOrbitThemeIndex+1,orbitThemeActive:!!activeOrbitTheme&&!activeOrbitTheme.paused,autopilotTarget:state.autopilotTarget&&{...state.autopilotTarget},scans:{...state.scans},scanType:state.scanAnimation.type,mineralCargo:JSON.parse(JSON.stringify(state.mineralCargo)),cargoTradeValue:state.cargoTradeValue,credits:state.credits,constructedShips:state.constructedShips.map(ship=>({...ship})),installedModules:[...state.installedModules],upgrades:{...state.upgrades},landerAngle:state.lander.angle,landerCrew:state.landerCrew,landerStorageUsed:state.landerStorageUsed,landerHold:state.landerHold.map(item=>({...item})),landerShots:state.landerShots.length,landerDestroyed:state.landerDestroyed,remainingMinerals:state.surfaceNodes.filter(node=>node.type==='mineral'&&!node.collected).length,remainingLifeforms:state.surfaceNodes.filter(node=>node.type==='biological'&&!node.collected&&!node.defeated).length,biologicalData:state.surfaceNodes.filter(node=>node.type==='biological'&&!node.collected&&node.defeated).length,active:storyActive,intro:introRunning}),
     setPlayer:(x,y)=>{ const ship=activeShip(); ship.x=x; ship.y=y; ship.vx=0; ship.vy=0; },
     enterPlanet:(name)=>{ const body=bodies.find(item=>item.name===String(name).toUpperCase()); if(body) enterPlanetSystem(body); },
     openPlanet:(name)=>{ const body=bodies.find(item=>item.name===String(name).toUpperCase()); if(body){enterPlanetSystem(body);enterPlanetDetail();} },
@@ -2470,6 +2473,7 @@
     plotCourse:(name)=>{const star=allHyperspaceStars().find(item=>item.name===String(name).toUpperCase());return star?plotStarmapCourse(star):false;},
     enterHyperspace,
     enterSystem:enterSolarSystem,
+    setSpaceThemeTime:(time)=>{spaceTheme.currentTime=Math.max(0,Number(time)||0);return spaceTheme.currentTime;},
     tradeMinerals,
     investigate
   };
