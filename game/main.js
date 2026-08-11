@@ -2673,7 +2673,10 @@ function focusSelectedShipCard(){
   if(!shipGrid) return;
   if(!isShipOverlayVisible()) return;
   const card = shipGrid.querySelector(`.ship-card[data-ship-id="${selectionA.id}"]`);
-  if(card) card.focus();
+  if(card){
+    try{card.focus({preventScroll:true});}
+    catch(err){card.focus();}
+  }
 }
 
 function getShipCardElements(){
@@ -2716,7 +2719,10 @@ function handleShipPickerNavigation(e){
     const targetId = targetCard ? targetCard.dataset.shipId : null;
     const type = targetId ? SHIP_TYPES.find(t=> t.id === targetId) : null;
     if(type) handleShipChoice(type);
-    if(targetCard) targetCard.focus();
+    if(targetCard){
+      try{targetCard.focus({preventScroll:true});}
+      catch(err){targetCard.focus();}
+    }
   }
   return true;
 }
@@ -2866,8 +2872,15 @@ function showShipOverlay(options={}){
   teamDraftOpen = nextMode === 'draft';
   if(shipOverlay){
     shipOverlay.classList.remove('hidden');
+    const overlayCard=shipOverlay.querySelector('.overlay-card');
+    if(overlayCard) overlayCard.scrollTop=0;
     updateOverlaySelection();
     updateFleetBuilderUI(options.statusMessage);
+    if(overlayCard) overlayCard.scrollTop=0;
+    requestAnimationFrame(()=>{
+      focusSelectedShipCard();
+      if(overlayCard) overlayCard.scrollTop=0;
+    });
   }
   drawPaused();
 }
