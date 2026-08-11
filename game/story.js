@@ -77,7 +77,10 @@
   const SYSTEM_TILT = 0.46;
   const PLANET_EDGE = 245;
   const PLANET_TILT = 0.56;
-  const EARTH_STARBASE = {x:142,y:-58,radius:18};
+  const STARBASE_SITE = {system:'ALPHA CENTAURI',body:'CHIRON',x:142,y:-58,radius:18};
+  const PIONEER_WRECK_SITE = {system:'ALPHA CENTAURI',body:'CHIRON',name:'PIONEER ONE'};
+  const CAMPAIGN_SCHEMA_VERSION = 1;
+  const PRE_STARBASE_EMERGENCY_FUEL = 25;
   const PLANET_SCAN_DURATION = 2.8;
   const PLANET_REVEAL_DURATION = 1.35;
   const HYPER_FUEL_PER_UNIT = 0.12;
@@ -104,16 +107,16 @@
   const COMMUNICATION_CONTACTS = {
     starbaseCommander:{
       name:'COMMANDER WALTER BRIGGS',
-      title:'EARTH STARBASE COMMANDER',
-      location:'EARTH STARBASE',
+      title:'TAFTIAN STARBASE COMMANDER',
+      location:'TAFTIAN DEEP-SPACE STARBASE',
       portrait:'assets/story/starbase-commander.png?v=briggs-1',
-      alt:'Commander Walter Briggs aboard Earth Starbase',
+      alt:'Commander Walter Briggs aboard Taftian Starbase',
       greeting:'welcome',
       nodes:{
         welcome:{
-          text:()=>state.missionStage===0
-            ? 'Welcome back, Captain. Earth Starbase is operational, and our engineers and specialists are ready to support Vanguard I. What do you need?'
-            : 'Captain, the Pioneer One recorder confirms the trail continues toward Alpha Centauri. Earth Starbase remains at your disposal.',
+          text:()=>!isMilestoneComplete('pioneerInvestigated')
+            ? 'Welcome, Captain. Taftian Starbase is operational, and our engineers and specialists are ready to support Vanguard I. What do you need?'
+            : 'Captain, Pioneer One has been located. Taftian Starbase remains at your disposal while the Federation investigation continues.',
           choices:[
             {label:'What are my current orders?',next:'mission'},
             {label:'What services does the starbase provide?',next:'services'},
@@ -121,9 +124,9 @@
           ]
         },
         mission:{
-          text:()=>state.missionStage===0
-            ? 'Your primary directive is to locate Pioneer One and determine why humanity’s first deep-space vessel never returned. Investigate the unidentified signal in Sol before proceeding beyond the system.'
-            : 'Follow Pioneer One’s final vector to Alpha Centauri. Preserve enough fuel for the return journey, and report any evidence of outside interference.',
+          text:()=>!isMilestoneComplete('pioneerInvestigated')
+            ? 'Your primary directive is to locate Pioneer One on Chiron and determine why the first expedition from Source never returned.'
+            : 'Pioneer One has been located. Preserve its recovered data while the Federation establishes a permanent deep-space foothold.',
           choices:[{label:'Understood. What else?',next:'welcome'}]
         },
         services:{
@@ -131,9 +134,9 @@
           choices:[{label:'Tell me about Pioneer One.',next:'pioneer'},{label:'Return to the main briefing.',next:'welcome'}]
         },
         pioneer:{
-          text:()=>state.missionStage===0
-            ? 'Pioneer One carried humanity’s first long-range survey crew. Its telemetry ended without a distress call, collision report, or drive failure. That silence is why Vanguard I was commissioned.'
-            : 'The recovered recorder shows no collision damage and no crew aboard. Its final navigation solution points toward Alpha Centauri, as though something deliberately drew it out of Sol.',
+          text:()=>!isMilestoneComplete('pioneerInvestigated')
+            ? 'Pioneer One was the first Taftian expedition sent from Source into this region. Its telemetry ended without a distress call. Vanguard I was launched to find it.'
+            : 'The recovered wreckage confirms Pioneer One reached Chiron. Its surviving records now anchor the Federation investigation.',
           choices:[{label:'Review my orders.',next:'mission'},{label:'Return to the main briefing.',next:'welcome'}]
         }
       }
@@ -170,7 +173,6 @@
     URANUS:{orbit:'19.2 AU',atmo:'>1000 ATM',temp:'-195° C',weather:'CLASS 7',tectonics:'N/A',mass:'14.5 E.S.',radius:'4.01 E.S.',gravity:'0.89 G',day:'0.72 DAYS',tilt:'97.8°',landable:false,palette:['#286f7e','#4fa9b5','#82d7dc','#c4f3ef'],counts:{mineral:0,biological:0,energy:1}},
     NEPTUNE:{orbit:'30.1 AU',atmo:'>1000 ATM',temp:'-200° C',weather:'CLASS 9',tectonics:'N/A',mass:'17.1 E.S.',radius:'3.88 E.S.',gravity:'1.14 G',day:'0.67 DAYS',tilt:'28.3°',landable:false,palette:['#162c7a','#244fb0','#3c75d8','#7ba5ef'],counts:{mineral:0,biological:0,energy:2}}
   };
-  const lostShip = {x:548, y:-302, name:'PIONEER ONE'};
   const hyperspaceStars = [
     {name:'SOL', x:-1150, y:650, color:'#ffe06b', size:2.2, available:true},
     {name:'ALPHA CENTAURI', x:-1580, y:395, color:'#ffb15c', size:1.9, available:true},
@@ -258,9 +260,123 @@
     death:'assets/sfx/lander-death.wav'
   };
 
+  function createInitialCampaignState(){
+    return {
+      schemaVersion:CAMPAIGN_SCHEMA_VERSION,
+      story:{
+        expeditionLaunched:true,
+        pioneerLocated:false,
+        pioneerInvestigated:false,
+        starbaseAuthorized:false,
+        starbaseOperational:false
+      },
+      discoveries:{
+        pioneerWreckage:false,
+        pioneerRecorder:false
+      },
+      capabilities:{
+        interstellarNavigation:true,
+        planetaryScanning:true,
+        planetaryLanding:true,
+        cargoHandling:true,
+        communications:true,
+        starbaseAccess:false,
+        refueling:false,
+        repairs:false,
+        cargoStorage:false,
+        researchProcessing:false,
+        campaignSaving:false,
+        outfitting:false,
+        moduleInstallation:false,
+        shipConstruction:false
+      },
+      research:{
+        completed:[],
+        active:null,
+        resources:{biologicalData:0,energySignatures:0}
+      },
+      blueprints:{ships:[],recovered:[]},
+      infrastructure:{
+        starbase:{status:'unavailable',system:STARBASE_SITE.system,body:STARBASE_SITE.body},
+        outfit:{status:'locked'},
+        shipyard:{status:'locked'}
+      },
+      assets:{landers:{operational:1,lost:0}},
+      safeguards:{preStarbaseFuelRecoveries:0,openingLanderRecoveries:0}
+    };
+  }
+
+  function isMilestoneComplete(id){
+    return !!(state.campaign&&state.campaign.story&&state.campaign.story[id]);
+  }
+
+  function hasCapability(id){
+    return !!(state.campaign&&state.campaign.capabilities&&state.campaign.capabilities[id]);
+  }
+
+  function isStarbaseOperational(){
+    return isMilestoneComplete('starbaseOperational')&&state.campaign.infrastructure.starbase.status==='operational';
+  }
+
+  function hasShipBlueprint(id){
+    return !!(state.campaign&&state.campaign.blueprints.ships.includes(id));
+  }
+
+  function authorizeFirstStarbase(){
+    if(isMilestoneComplete('starbaseAuthorized')) return false;
+    state.campaign.story.starbaseAuthorized=true;
+    state.campaign.infrastructure.starbase.status='constructing';
+    return true;
+  }
+
+  function commissionFirstStarbase(){
+    if(!isMilestoneComplete('starbaseAuthorized')) return false;
+    state.campaign.story.starbaseOperational=true;
+    state.campaign.infrastructure.starbase.status='operational';
+    state.campaign.infrastructure.outfit.status='support';
+    Object.assign(state.campaign.capabilities,{
+      starbaseAccess:true,
+      refueling:true,
+      repairs:true,
+      cargoStorage:true,
+      researchProcessing:true,
+      campaignSaving:true,
+      outfitting:true
+    });
+    updateStarbaseServices();
+    return true;
+  }
+
+  function unlockShipBlueprint(id){
+    if(typeof SHIP_TYPES==='undefined'||!SHIP_TYPES.some(type=>type&&type.id===id)||hasShipBlueprint(id)) return false;
+    state.campaign.blueprints.ships.push(id);
+    updateShipyard();
+    return true;
+  }
+
+  function activateShipyard(){
+    if(!isStarbaseOperational()) return false;
+    state.campaign.capabilities.shipConstruction=true;
+    state.campaign.infrastructure.shipyard.status='online';
+    updateStarbaseServices();
+    return true;
+  }
+
+  function createCampaignSaveSnapshot(){
+    return JSON.parse(JSON.stringify({
+      schemaVersion:CAMPAIGN_SCHEMA_VERSION,
+      campaign:state.campaign,
+      navigation:{currentSystem:state.currentSystem,mode:state.mode,player:state.player,hyper:state.hyper,planet:state.planet&&state.planet.name},
+      flagship:{fuel:state.fuel,maxFuel:state.maxFuel,crew:state.crew,maxCrew:state.maxCrew,installedModules:state.installedModules,upgrades:state.upgrades},
+      economy:{credits:state.credits,mineralCargo:state.mineralCargo,cargoTradeValue:state.cargoTradeValue,collected:state.collected},
+      fleet:{constructedShips:state.constructedShips},
+      exploration:{planetSurveys:state.planetSurveys}
+    }));
+  }
+
   const state = {
     mode:'system',
-    currentSystem:'SOL',
+    currentSystem:PIONEER_WRECK_SITE.system,
     starmapReturnMode:'system',
     starmapSelection:null,
     autopilotTarget:null,
@@ -271,7 +387,7 @@
     maxFuel:100,
     crew:50,
     maxCrew:100,
-    missionStage:0,
+    campaign:createInitialCampaignState(),
     transitionLock:0,
     messageTimer:0,
     player:{x:215,y:112,vx:0,vy:0,angle:-0.45},
@@ -361,7 +477,24 @@
         });
       }
     });
+    if(body.name===PIONEER_WRECK_SITE.body&&!isMilestoneComplete('pioneerInvestigated')){
+      nodes.push({
+        type:'energy',storyId:'pioneerWreckage',x:.72,y:.42,collected:false,value:8,
+        hp:0,defeated:false,attackCooldown:0,heading:0
+      });
+    }
     return nodes;
+  }
+
+  function investigatePioneerWreckage(){
+    if(isMilestoneComplete('pioneerInvestigated')) return false;
+    Object.assign(state.campaign.story,{pioneerLocated:true,pioneerInvestigated:true});
+    Object.assign(state.campaign.discoveries,{pioneerWreckage:true,pioneerRecorder:true});
+    authorizeFirstStarbase();
+    if(missionTitle) missionTitle.textContent='A PERMANENT FOOTHOLD';
+    if(missionText) missionText.textContent='Pioneer One has been found. The Federation has authorized construction of its first Taftian deep-space starbase.';
+    setLog('SOURCE COMMAND','Pioneer One confirmed. Starbase construction is authorized; a Federation construction flotilla is being dispatched.',12);
+    return true;
   }
 
   function setPlanetOpsVisible(visible){
@@ -382,7 +515,21 @@
     if(shipyardScreen) shipyardScreen.classList.add('hidden');
     if(outfitScreen) outfitScreen.classList.add('hidden');
     if(communicationScreen){communicationScreen.classList.add('hidden');communicationScreen.setAttribute('aria-hidden','true');}
+    updateStarbaseServices();
     requestAnimationFrame(()=>{if(storyActive) resize();});
+  }
+
+  function updateStarbaseServices(){
+    starbaseButtons.forEach(button=>{
+      const action=button.dataset.starbaseAction;
+      if(!button.dataset.baseLabel) button.dataset.baseLabel=button.textContent;
+      let available=true;
+      if(action==='commander') available=isStarbaseOperational()&&hasCapability('communications');
+      if(action==='outfit') available=isStarbaseOperational()&&hasCapability('outfitting');
+      if(action==='shipyard') available=isStarbaseOperational()&&hasCapability('shipConstruction')&&state.campaign.infrastructure.shipyard.status==='online';
+      button.disabled=!available;
+      button.textContent=available||action==='depart'?button.dataset.baseLabel:`${button.dataset.baseLabel} — OFFLINE`;
+    });
   }
 
   function playShipyardTheme(){
@@ -514,7 +661,8 @@
 
   function getShipyardCatalog(){
     if(typeof SHIP_TYPES==='undefined') return [];
-    return SHIP_TYPES.filter(type=>type&&type.id!=='random'&&type.id!=='test_dummy');
+    if(!hasCapability('shipConstruction')) return [];
+    return SHIP_TYPES.filter(type=>type&&type.id!=='random'&&type.id!=='test_dummy'&&hasShipBlueprint(type.id));
   }
 
   function shipCost(type){
@@ -571,7 +719,16 @@
 
   function updateShipyard(){
     const type=selectedShip();
-    if(!type) return;
+    if(!type){
+      if(shipyardPreview) shipyardPreview.removeAttribute('src');
+      if(shipyardDockName) shipyardDockName.textContent='NO AUTHORIZED HULL BLUEPRINT';
+      if(shipyardShipName) shipyardShipName.textContent='NO BLUEPRINTS';
+      if(shipyardShipClass) shipyardShipClass.textContent='RECOVER OR RESEARCH A HULL DESIGN';
+      if(shipyardShipCost) shipyardShipCost.textContent='---';
+      if(shipyardCredits) shipyardCredits.textContent=String(state.credits);
+      if(shipyardBuild) shipyardBuild.disabled=true;
+      return;
+    }
     const cost=shipCost(type);
     if(shipyardPreview){
       setShipImage(shipyardPreview,type);
@@ -624,6 +781,11 @@
   }
 
   function openShipyard(){
+    if(!isStarbaseOperational()||!hasCapability('shipConstruction')||state.campaign.infrastructure.shipyard.status!=='online'){
+      state.starbaseNotice='Shipyard systems are offline pending industrial authorization and a viable hull blueprint.';
+      setLog('STARBASE CONTROL',state.starbaseNotice,6);
+      return false;
+    }
     state.mode='shipyard';clearKeys();
     screen.classList.add('starbase-cinematic-active');
     if(starbaseMenu) starbaseMenu.classList.add('hidden');
@@ -632,9 +794,11 @@
     if(shipyardScreen) shipyardScreen.classList.remove('hidden');
     renderShipyardBays();updateShipyard();animateShipyardPreview();playShipyardTheme();
     if(controlsLabel) controlsLabel.textContent='SELECT A HULL AND OPEN A CONSTRUCTION BAY';
+    return true;
   }
 
   function buildSelectedShip(){
+    if(!isStarbaseOperational()||!hasCapability('shipConstruction')) return false;
     const type=selectedShip();
     if(!type||state.shipyardBuilding) return false;
     const cost=shipCost(type);
@@ -686,7 +850,7 @@
     if(outfitModuleDescription) outfitModuleDescription.textContent=module.description;
     if(outfitModuleCost) outfitModuleCost.textContent=`${module.cost} CREDITS`;
     if(outfitCredits) outfitCredits.textContent=String(state.credits);
-    if(outfitInstall) outfitInstall.disabled=state.installedModules.length>=MAX_MODULES||state.credits<module.cost;
+    if(outfitInstall) outfitInstall.disabled=!hasCapability('moduleInstallation')||state.installedModules.length>=MAX_MODULES||state.credits<module.cost;
     if(outfitStatSpeed) outfitStatSpeed.textContent=(92*(1+state.upgrades.thrusters*0.1)).toFixed(0);
     if(outfitStatTurn) outfitStatTurn.textContent=(BASE_TURN_RATE*(1+state.upgrades.turningJets*0.1)).toFixed(2);
     if(outfitStatWeapon) outfitStatWeapon.textContent=(1+state.upgrades.weapons*0.2).toFixed(2);
@@ -705,7 +869,7 @@
   }
 
   function buyFuel(){
-    if(state.mode!=='outfit') return false;
+    if(state.mode!=='outfit'||!hasCapability('refueling')) return false;
     const quote=fuelPurchaseQuote();
     if(!quote.amount){if(outfitStatus) outfitStatus.textContent='VANGUARD I FUEL TANKS ARE FULL.';return false;}
     if(state.credits<quote.cost){if(outfitStatus) outfitStatus.textContent=`INSUFFICIENT CREDITS — ${quote.cost-state.credits} REQUIRED.`;return false;}
@@ -722,6 +886,11 @@
   }
 
   function openOutfit(){
+    if(!isStarbaseOperational()||!hasCapability('outfitting')){
+      state.starbaseNotice='Outfit support is offline until the Taftian starbase is operational.';
+      setLog('STARBASE CONTROL',state.starbaseNotice,5);
+      return false;
+    }
     state.mode='outfit';clearKeys();
     screen.classList.add('starbase-cinematic-active');
     if(starbaseMenu) starbaseMenu.classList.add('hidden');
@@ -730,9 +899,11 @@
     if(outfitScreen) outfitScreen.classList.remove('hidden');
     renderOutfitSlots();updateOutfit();playShipyardTheme();
     if(controlsLabel) controlsLabel.textContent='SELECT AND INSTALL FLAGSHIP MODULES';
+    return true;
   }
 
   function installSelectedModule(){
+    if(!hasCapability('moduleInstallation')){if(outfitStatus) outfitStatus.textContent='MODULE INSTALLATION REQUIRES RESEARCH AUTHORIZATION.';return false;}
     const module=selectedModule();
     if(state.installedModules.length>=MAX_MODULES){if(outfitStatus) outfitStatus.textContent='ALL MODULE SLOTS ARE OCCUPIED.';return false;}
     if(state.credits<module.cost){if(outfitStatus) outfitStatus.textContent=`INSUFFICIENT CREDITS — ${module.cost-state.credits} REQUIRED.`;return false;}
@@ -794,7 +965,7 @@
 
   function openCommunication(contactId,nodeId){
     const contact=COMMUNICATION_CONTACTS[contactId];
-    if(!contact) return false;
+    if(!contact||!isStarbaseOperational()||!hasCapability('starbaseAccess')) return false;
     state.mode='communication';clearKeys();
     state.communicationContact=contactId;
     screen.classList.add('starbase-cinematic-active');
@@ -828,7 +999,7 @@
       const action = button.dataset.planetAction;
       button.classList.toggle('active',!!state.scans[action] || state.scanAnimation.type===action);
       button.disabled = state.mode === 'landing' || state.mode === 'takeoff' || (scanning && action!=='exit');
-      if(action === 'dispatch') button.disabled = scanning || !profile || !profile.landable || state.mode !== 'planetDetail';
+      if(action === 'dispatch') button.disabled = scanning || !hasCapability('planetaryLanding') || state.campaign.assets.landers.operational<1 || !profile || !profile.landable || state.mode !== 'planetDetail';
     });
   }
 
@@ -876,7 +1047,7 @@
 
   function resetStory(){
     state.mode = 'system';
-    state.currentSystem = 'SOL';
+    state.currentSystem = PIONEER_WRECK_SITE.system;
     state.starmapReturnMode = 'system';
     state.starmapSelection = null;
     state.autopilotTarget = null;
@@ -887,7 +1058,7 @@
     state.maxFuel = 100;
     state.crew = 50;
     state.maxCrew = 100;
-    state.missionStage = 0;
+    state.campaign = createInitialCampaignState();
     state.transitionLock = 1.5;
     state.messageTimer = 8;
     state.planet = null;
@@ -928,10 +1099,10 @@
     Object.assign(state.hyper, {x:0,y:0,vx:0,vy:0,angle:0});
     Object.assign(state.planetShip, {x:0,y:205,vx:0,vy:-18,angle:-Math.PI/2});
     if(missionTitle) missionTitle.textContent = 'THE SILENT PIONEER';
-    if(missionText) missionText.textContent = "Travel to the unidentified signal and investigate humanity's missing first spacecraft.";
-    if(systemLabel) systemLabel.textContent='SOL SYSTEM';
+    if(missionText) missionText.textContent = "Locate Pioneer One's wreckage on Chiron and investigate the lost expedition.";
+    if(systemLabel) systemLabel.textContent=`${PIONEER_WRECK_SITE.system} SYSTEM`;
     if(systemSubLabel) systemSubLabel.textContent='LOCAL SPACE';
-    setLog('COMMAND', 'Vanguard I, find out why our first ship never came home.', 8);
+    setLog('SOURCE COMMAND', 'Vanguard I, locate Pioneer One on Chiron and determine why the expedition never returned.', 8);
     setPlanetOpsVisible(false);
     stopShipyardTheme();
     stopStarbaseTheme();
@@ -1240,6 +1411,17 @@
     return true;
   }
 
+  // Temporary pre-starbase safety valve. It prevents a permanent fuel soft lock without changing normal fuel costs.
+  function applyPreStarbaseFuelSafeguard(){
+    if(isStarbaseOperational()||state.fuel>.5) return false;
+    state.fuel=Math.min(state.maxFuel,PRE_STARBASE_EMERGENCY_FUEL);
+    state.autopilotFuelWarning=false;
+    state.campaign.safeguards.preStarbaseFuelRecoveries+=1;
+    const ship=activeShip();ship.vx*=.25;ship.vy*=.25;
+    setLog('SOURCE EMERGENCY RESERVE',`${PRE_STARBASE_EMERGENCY_FUEL} fuel restored. This temporary opening safeguard will be replaced by expedition logistics.`,8);
+    return true;
+  }
+
   function update(dt){
     state.elapsed += dt;
     if(state.upgrades.dynamos>0&&!keys.thrust&&!keys.reverse){
@@ -1250,9 +1432,7 @@
     state.messageTimer = Math.max(0, state.messageTimer-dt);
     if(state.mode === 'system'){
       updateShip(state.player, dt, false);
-      const range = Math.hypot(state.player.x-lostShip.x, state.player.y-lostShip.y);
-      if(state.currentSystem==='SOL'&&state.missionStage === 0 && interaction) interaction.classList.toggle('hidden', range > 42);
-      else if(interaction) interaction.classList.add('hidden');
+      if(interaction) interaction.classList.add('hidden');
       if(state.transitionLock <= 0){
         const nearbyPlanet = currentBodies().find(body=>{
           const position = bodyPosition(body);
@@ -1265,10 +1445,10 @@
       updateShip(state.planetShip,dt,false);
       if(interaction) interaction.classList.add('hidden');
       const localDistance = Math.hypot(state.planetShip.x,state.planetShip.y);
-      const starbaseDistance=state.planet&&state.planet.name==='EARTH'
-        ? Math.hypot(state.planetShip.x-EARTH_STARBASE.x,state.planetShip.y-EARTH_STARBASE.y)
+      const starbaseDistance=isStarbaseOperational()&&state.currentSystem===STARBASE_SITE.system&&state.planet&&state.planet.name===STARBASE_SITE.body
+        ? Math.hypot(state.planetShip.x-STARBASE_SITE.x,state.planetShip.y-STARBASE_SITE.y)
         : Infinity;
-      if(starbaseDistance<EARTH_STARBASE.radius&&state.transitionLock<=0) enterStarbase();
+      if(starbaseDistance<STARBASE_SITE.radius&&state.transitionLock<=0) enterStarbase();
       else if(localDistance<24 && state.transitionLock<=0) enterPlanetDetail();
       else if(localDistance>PLANET_EDGE && state.transitionLock<=0) exitPlanetSystem();
     }else if(state.mode === 'planetDetail'){
@@ -1309,6 +1489,7 @@
         }
       }
     }
+    applyPreStarbaseFuelSafeguard();
     updateUi();
   }
 
@@ -1357,7 +1538,7 @@
   }
 
   function enterStarbase(){
-    if(!state.planet||state.planet.name!=='EARTH') return;
+    if(!isStarbaseOperational()||!hasCapability('starbaseAccess')||state.currentSystem!==STARBASE_SITE.system||!state.planet||state.planet.name!==STARBASE_SITE.body) return false;
     const unloadedValue=state.cargoTradeValue;
     const unloadedUnits=Object.values(state.mineralCargo).reduce((sum,item)=>sum+item.units,0);
     if(unloadedValue>0){
@@ -1369,7 +1550,7 @@
     state.planetShip.vx=0;state.planetShip.vy=0;
     setStarbaseMenuVisible(true);
     playStarbaseTheme();
-    if(systemLabel) systemLabel.textContent='EARTH STARBASE';
+    if(systemLabel) systemLabel.textContent='TAFTIAN STARBASE';
     if(systemSubLabel) systemSubLabel.textContent='DOCKING BERTH 01';
     if(controlsLabel) controlsLabel.textContent='SELECT A STARBASE SERVICE';
     const dockingMessage=unloadedValue>0
@@ -1378,17 +1559,18 @@
     state.starbaseNotice=dockingMessage;
     setLog('STARBASE CONTROL',dockingMessage,7);
     updateUi();
+    return true;
   }
 
   function departStarbase(){
     state.mode='planet';
     playSpaceTheme();
-    Object.assign(state.planetShip,{x:EARTH_STARBASE.x+32,y:EARTH_STARBASE.y+12,vx:25,vy:9,angle:0.34});
+    Object.assign(state.planetShip,{x:STARBASE_SITE.x+32,y:STARBASE_SITE.y+12,vx:25,vy:9,angle:0.34});
     state.transitionLock=1.8;
     setStarbaseMenuVisible(false);
     stopShipyardTheme();
     stopStarbaseTheme();
-    if(systemLabel) systemLabel.textContent='SOL — EARTH';
+    if(systemLabel) systemLabel.textContent=`${state.currentSystem} — ${state.planet.name}`;
     if(systemSubLabel) systemSubLabel.textContent='PLANETARY LOCAL SPACE';
     if(controlsLabel) controlsLabel.innerHTML='W / ↑ THRUST&nbsp;&nbsp; A D / ← → TURN&nbsp;&nbsp; FLY CLOSE TO ANALYZE';
     setLog('STARBASE CONTROL','Vanguard I cleared for departure.',4);
@@ -1458,9 +1640,17 @@
 
   function dispatchLander(){
     const profile = getPlanetProfile();
+    if(!hasCapability('planetaryLanding')){
+      setLog('LANDER CONTROL','Planetary landing capability is not available.',5);
+      return false;
+    }
+    if(state.campaign.assets.landers.operational<1){
+      setLog('LANDER CONTROL','No operational planet landers remain aboard Vanguard I.',6);
+      return false;
+    }
     if(!profile || !profile.landable){
       setLog('LANDER CONTROL','No solid surface detected. Lander deployment denied.',5);
-      return;
+      return false;
     }
     state.mode = 'landing';
     state.landingTimer = 0;
@@ -1477,6 +1667,7 @@
     if(systemSubLabel) systemSubLabel.textContent = 'LANDER DESCENT';
     if(controlsLabel) controlsLabel.textContent = 'PLANET LANDER EN ROUTE';
     setLog('LANDER CONTROL',`Descent trajectory locked for ${state.planet.name}.`,5);
+    return true;
   }
 
   function enterSurface(){
@@ -1586,6 +1777,8 @@
     state.landerDamageFlash=1;
     if(state.landerCrew<=0){
       state.landerDestroyed=true;
+      state.campaign.assets.landers.operational=Math.max(0,state.campaign.assets.landers.operational-1);
+      state.campaign.assets.landers.lost+=1;
       state.landerDeathTimer=0;
       state.landerShots=[];
       playLanderSfx('death',.9);
@@ -1609,9 +1802,20 @@
     state.planetRevealReady=true;
     if(planetOpsMenu) planetOpsMenu.classList.remove('hidden');
     if(systemSubLabel) systemSubLabel.textContent='PLANETARY ANALYSIS';
-    if(controlsLabel) controlsLabel.textContent='LANDER LOST - REPLACEMENT CREW AVAILABLE';
-    setLog('LANDER CONTROL','Expedition lost. A replacement lander is ready for another deployment.',6);
+    const recovered=applyOpeningLanderRecoverySafeguard();
+    if(controlsLabel) controlsLabel.textContent=recovered?'EMERGENCY LANDER RECOVERY COMPLETE':'LANDER LOST - NO OPERATIONAL LANDERS REMAIN';
+    setLog('LANDER CONTROL',recovered
+      ? 'Opening safeguard engaged: Source emergency stores have restored one basic lander so Pioneer One remains reachable.'
+      : 'Expedition lost. No replacement lander is available aboard Vanguard I.',7);
     refreshPlanetOps();
+  }
+
+  // Temporary opening-only safeguard. Replace with a thematic rescue or fabrication system later.
+  function applyOpeningLanderRecoverySafeguard(){
+    if(isMilestoneComplete('pioneerInvestigated')||state.campaign.assets.landers.operational>0) return false;
+    state.campaign.assets.landers.operational=1;
+    state.campaign.safeguards.openingLanderRecoveries+=1;
+    return true;
   }
 
   function transferLanderCargo(){
@@ -1622,7 +1826,11 @@
         state.mineralCargo[item.material]=existing;
         state.collected.mineral+=item.units;
         state.cargoTradeValue+=item.units*item.unitValue;
-      }else state.collected[item.type]+=item.units;
+      }else{
+        state.collected[item.type]+=item.units;
+        if(item.type==='biological') state.campaign.research.resources.biologicalData+=item.units;
+        if(item.type==='energy') state.campaign.research.resources.energySignatures+=item.units;
+      }
     });
     const transferred=state.landerStorageUsed;
     state.landerHold=[];
@@ -1720,18 +1928,7 @@
     setLog('NAVIGATION', `Now entering the ${name} system. ${currentBodies().length} planetary bodies charted.`, 5);
   }
 
-  function investigate(){
-    if(!storyActive || state.mode !== 'system' || state.currentSystem!=='SOL' || state.missionStage !== 0) return;
-    const range = Math.hypot(state.player.x-lostShip.x, state.player.y-lostShip.y);
-    if(range > 42) return;
-    state.missionStage = 1;
-    state.player.vx *= 0.2;
-    state.player.vy *= 0.2;
-    if(interaction) interaction.classList.add('hidden');
-    if(missionTitle) missionTitle.textContent = 'THE LAST VECTOR';
-    if(missionText) missionText.textContent = "Pioneer One is abandoned. Its damaged flight recorder points beyond Sol, toward Alpha Centauri.";
-    setLog('FLIGHT RECORDER', 'Crew absent. No collision damage. Final heading: Alpha Centauri. Something drew them out of the system.', 12);
-  }
+  function investigate(){ return false; }
 
   function updateUi(){
     const fuelPercent=Math.max(0,Math.min(100,state.fuel/state.maxFuel*100));
@@ -1758,14 +1955,13 @@
       return;
     }
     if(distanceTitle) distanceTitle.textContent = state.mode === 'hyperspace' ? 'NAV RANGE' : 'SIGNAL RANGE';
-    if(state.missionStage === 0){
+    if(!isMilestoneComplete('pioneerInvestigated')){
+      const wreckBody=currentBodies().find(body=>body.name===PIONEER_WRECK_SITE.body);
       distanceLabel.textContent = state.mode === 'system'
-        ? (state.currentSystem==='SOL'?`${Math.round(Math.hypot(state.player.x-lostShip.x,state.player.y-lostShip.y))} AU`:state.currentSystem)
-        : 'RETURN TO SOL';
+        ? (state.currentSystem===PIONEER_WRECK_SITE.system&&wreckBody?`${Math.round(Math.hypot(state.player.x-bodyPosition(wreckBody).x,state.player.y-bodyPosition(wreckBody).y))} AU`:PIONEER_WRECK_SITE.system)
+        : `RETURN TO ${PIONEER_WRECK_SITE.system}`;
     }else{
-      distanceLabel.textContent = state.mode === 'hyperspace'
-        ? `${Math.round(Math.hypot(state.hyper.x+430,state.hyper.y+255))} HS`
-        : 'LEAVE SOL';
+      distanceLabel.textContent = isStarbaseOperational()?'STARBASE ONLINE':'STARBASE CONSTRUCTION AUTHORIZED';
     }
   }
 
@@ -1818,7 +2014,6 @@
     ctx.fillStyle = '#fff5a0'; ctx.beginPath(); ctx.arc(0,0,10,0,TWO_PI); ctx.fill();
     ctx.restore();
     systemPlanets.forEach(body=> drawPlanet(body,tr.scale,tr.tilt));
-    if(state.currentSystem==='SOL') drawLostShip(tr.scale,tr.tilt);
     drawPlayer(state.player,tr.scale,'#7ff7ff',tr.tilt);
     ctx.restore();
     drawEdgeGuide(tr);
@@ -1831,6 +2026,11 @@
     ctx.save(); ctx.translate(x,y); ctx.scale(1,1/tilt);
     ctx.shadowColor = body.color; ctx.shadowBlur = 10/scale;
     ctx.fillStyle = body.color; ctx.beginPath(); ctx.arc(0,0,body.radius/scale*1.15,0,TWO_PI); ctx.fill();
+    if(state.currentSystem===PIONEER_WRECK_SITE.system&&body.name===PIONEER_WRECK_SITE.body&&!isMilestoneComplete('pioneerInvestigated')){
+      const pulse=.55+Math.sin(state.elapsed*4)*.35;
+      ctx.shadowBlur=0;ctx.strokeStyle=`rgba(255,76,55,${pulse})`;ctx.lineWidth=2/scale;
+      for(let index=0;index<3;index++){ctx.beginPath();ctx.arc(0,0,(body.radius+10+index*8)/scale,0,TWO_PI);ctx.stroke();}
+    }
     if(body.rings){
       ctx.shadowBlur = 0; ctx.strokeStyle = 'rgba(236,218,160,0.8)'; ctx.lineWidth = 2/scale;
       ctx.beginPath(); ctx.ellipse(0,0,body.radius*2.1/scale,body.radius*0.7/scale,-0.25,0,TWO_PI); ctx.stroke();
@@ -1881,7 +2081,9 @@
       ctx.fillStyle = moon.color; ctx.beginPath(); ctx.arc(0,0,(4.5+Math.min(2,index*0.25))/scale,0,TWO_PI); ctx.fill();
       ctx.restore();
     });
-    if(body.name==='EARTH') drawLocalStarbase(scale,PLANET_TILT);
+    if(state.currentSystem===STARBASE_SITE.system&&body.name===STARBASE_SITE.body&&state.campaign.infrastructure.starbase.status!=='unavailable'){
+      drawLocalStarbase(scale,PLANET_TILT,state.campaign.infrastructure.starbase.status);
+    }
     drawPlayer(state.planetShip,scale,'#7ff7ff',PLANET_TILT);
     ctx.restore();
     ctx.save();
@@ -1891,15 +2093,16 @@
     ctx.restore();
   }
 
-  function drawLocalStarbase(scale,tilt){
-    ctx.save();ctx.translate(EARTH_STARBASE.x,EARTH_STARBASE.y);ctx.scale(1,1/tilt);
+  function drawLocalStarbase(scale,tilt,status='operational'){
+    ctx.save();ctx.translate(STARBASE_SITE.x,STARBASE_SITE.y);ctx.scale(1,1/tilt);
     const pulse=0.65+Math.sin(state.elapsed*4)*0.3;
-    ctx.strokeStyle=`rgba(61,239,255,${pulse})`;ctx.lineWidth=2/scale;
+    const operational=status==='operational';
+    ctx.strokeStyle=operational?`rgba(61,239,255,${pulse})`:`rgba(255,193,66,${pulse})`;ctx.lineWidth=2/scale;
     ctx.beginPath();ctx.arc(0,0,25/scale,0,TWO_PI);ctx.stroke();
     ctx.fillStyle='#b9d4df';ctx.fillRect(-3/scale,-14/scale,6/scale,28/scale);
-    ctx.strokeStyle='#5ff4ff';ctx.beginPath();ctx.ellipse(0,0,14/scale,6/scale,0,0,TWO_PI);ctx.stroke();
+    ctx.strokeStyle=operational?'#5ff4ff':'#ffc247';ctx.beginPath();ctx.ellipse(0,0,14/scale,6/scale,0,0,TWO_PI);ctx.stroke();
     ctx.fillStyle='#ff3c2b';ctx.beginPath();ctx.arc(0,-15/scale,3/scale,0,TWO_PI);ctx.fill();
-    ctx.fillStyle='#8ff7ff';ctx.font=`${10/scale}px Orbitron, sans-serif`;ctx.textAlign='center';ctx.fillText('EARTH STARBASE',0,-31/scale);
+    ctx.fillStyle=operational?'#8ff7ff':'#ffd375';ctx.font=`${10/scale}px Orbitron, sans-serif`;ctx.textAlign='center';ctx.fillText(operational?'TAFTIAN STARBASE':'STARBASE CONSTRUCTION ZONE',0,-31/scale);
     ctx.restore();
   }
 
@@ -1932,7 +2135,7 @@
     for(let i=0;i<9;i++){ctx.beginPath();ctx.ellipse(earthX+Math.sin(i*2.1)*earthRadius*.45,earthY-earthRadius*.65+i*earthRadius*.16,earthRadius*.24,earthRadius*.08,i*.4,0,TWO_PI);ctx.fill();}ctx.restore();
     drawStationSprite(viewWidth*0.6,viewHeight*0.5,Math.min(1.35,viewHeight/690));
     ctx.fillStyle='#1221ba';ctx.fillRect(0,0,viewWidth,28);
-    ctx.fillStyle='#ff49dc';ctx.font='13px Orbitron, sans-serif';ctx.textAlign='center';ctx.fillText('EARTH STARBASE',viewWidth/2,19);
+    ctx.fillStyle='#ff49dc';ctx.font='13px Orbitron, sans-serif';ctx.textAlign='center';ctx.fillText('TAFTIAN DEEP-SPACE STARBASE',viewWidth/2,19);
     ctx.textAlign='left';ctx.fillStyle='#8ff5ff';ctx.font='12px Orbitron, sans-serif';ctx.fillText(`CREDITS: ${state.credits}`,28,62);
     ctx.fillText(`MINERAL CARGO VALUE: ${state.cargoTradeValue}`,28,84);
     const cargoNames=Object.entries(state.mineralCargo).map(([name,item])=>`${item.units} ${name}`).slice(0,6);
@@ -2180,7 +2383,7 @@
   function drawLanderHud(rect){
     const x=rect.x+12,y=rect.y+12,w=238,h=72;
     ctx.save();ctx.fillStyle='rgba(1,9,15,.86)';ctx.fillRect(x,y,w,h);ctx.strokeStyle='#3cdcec';ctx.lineWidth=1.5;ctx.strokeRect(x,y,w,h);
-    ctx.font='bold 9px Orbitron, sans-serif';ctx.textAlign='left';ctx.fillStyle='#75f5ff';ctx.fillText('PLANET LANDER',x+9,y+15);
+    ctx.font='bold 9px Orbitron, sans-serif';ctx.textAlign='left';ctx.fillStyle='#75f5ff';ctx.fillText(`PLANET LANDER · ${state.campaign.assets.landers.operational} OPERATIONAL`,x+9,y+15);
     ctx.fillStyle='#9fb3c0';ctx.fillText('CREW',x+9,y+32);
     for(let index=0;index<LANDER_MAX_CREW;index++){
       ctx.fillStyle=index<state.landerCrew?'#48f06e':'#351219';ctx.fillRect(x+50+index*10,y+24,7,10);
@@ -2255,19 +2458,6 @@
     });
     if(state.landerDamageFlash>0){ctx.fillStyle=`rgba(255,22,12,${state.landerDamageFlash*.28})`;ctx.fillRect(0,0,viewWidth,viewHeight);}
     if(state.surfaceFade>0){ctx.fillStyle=`rgba(0,0,0,${state.surfaceFade})`;ctx.fillRect(0,0,viewWidth,viewHeight);}
-  }
-
-  function drawLostShip(scale, tilt=1){
-    const pulse = 0.55+Math.sin(state.elapsed*4)*0.35;
-    ctx.save(); ctx.translate(lostShip.x,lostShip.y); ctx.scale(1,1/tilt);
-    ctx.strokeStyle = state.missionStage === 0 ? `rgba(255,65,55,${pulse})` : 'rgba(80,180,210,0.45)';
-    ctx.lineWidth = 2/scale;
-    for(let i=0;i<3;i++){
-      ctx.beginPath(); ctx.arc(0,0,(16+i*12+pulse*5)/scale,0,TWO_PI); ctx.stroke();
-    }
-    ctx.rotate(-0.55); ctx.fillStyle = state.missionStage === 0 ? '#ff6b45' : '#668b9b';
-    ctx.fillRect(-9/scale,-3/scale,18/scale,6/scale);
-    ctx.restore();
   }
 
   function drawPlayer(ship, scale, color, tilt=1, pixelWidth=50){
@@ -2585,7 +2775,7 @@
     if(panel === 'manifest') setLog('MANIFEST', `Vanguard I — Crew: ${state.crew}/${state.maxCrew} — Escort vessels: ${state.constructedShips.length} — Fuel: ${Math.ceil(state.fuel)}/${state.maxFuel}.`, 5);
     if(panel === 'game') setLog('GAME', 'Story progress is retained while this page remains open. Full save slots will follow.', 5);
     if(panel === 'navigate'){
-      const target = state.autopilotTarget?`${state.autopilotTarget.name} via autopilot`:(state.missionStage === 0 ? 'the Pioneer One signal' : 'Alpha Centauri via hyperspace');
+      const target = state.autopilotTarget?`${state.autopilotTarget.name} via autopilot`:(!isMilestoneComplete('pioneerInvestigated') ? `Pioneer One wreckage on ${PIONEER_WRECK_SITE.body}` : 'the authorized Taftian starbase construction zone');
       setLog('NAVIGATION', `Current mission target: ${target}.`, 5);
     }
   }
@@ -2617,6 +2807,10 @@
     if(progress<1) return;
     const completed=animation.type;
     state.scans[completed]=true;
+    const pioneerScan=completed==='energy'&&state.currentSystem===PIONEER_WRECK_SITE.system&&state.planet&&state.planet.name===PIONEER_WRECK_SITE.body;
+    if(pioneerScan){
+      state.campaign.story.pioneerLocated=true;
+    }
     animation.type=null;
     animation.elapsed=0;
     const count=state.surfaceNodes.filter(node=>node.type===completed).length;
@@ -2626,7 +2820,7 @@
       beginPlanetScan(next);
     }else{
       if(controlsLabel) controlsLabel.textContent='SELECT A SCAN OR DISPATCH THE PLANET LANDER';
-      setLog('SCAN CONTROL',`${count} ${labels[completed]} detected on ${state.planet.name}.`,6);
+      setLog(pioneerScan?'SCIENCE':'SCAN CONTROL',pioneerScan?'Pioneer One wreckage signature isolated on the surface.':`${count} ${labels[completed]} detected on ${state.planet.name}.`,pioneerScan?7:6);
       refreshPlanetOps();
     }
   }
@@ -2662,13 +2856,14 @@
       state.pickupNotices=state.pickupNotices.slice(0,3);
       setLog('LANDER TEAM',`Loaded +${units} ${nearest.material}. Lander storage: ${state.landerStorageUsed}/${LANDER_STORAGE_CAPACITY}.`,5);
     }else{
-      state.landerHold.push({type:nearest.type,units});
+      state.landerHold.push({type:nearest.type,units,storyId:nearest.storyId||null});
       const names={biological:'biological data',energy:'energy technology'};
       playLanderSfx(nearest.type==='biological'?'bio':'pickup',.76);
       state.pickupNotices.unshift({text:`+${units} ${nearest.type==='biological'?'BIO DATA':'ENERGY DATA'}`,detail:`HOLD ${state.landerStorageUsed}/${LANDER_STORAGE_CAPACITY}`,color:nearest.type==='biological'?'#63ff75':'#52e7ff',age:0,duration:2.5});
       state.pickupNotices=state.pickupNotices.slice(0,3);
       setLog('LANDER TEAM',`Recovered ${units} ${names[nearest.type]}. Lander storage: ${state.landerStorageUsed}/${LANDER_STORAGE_CAPACITY}.`,4);
     }
+    if(nearest.storyId==='pioneerWreckage') investigatePioneerWreckage();
     updateUi();
   }
 
@@ -2741,10 +2936,10 @@
     start: startSystemGame,
     finishIntro,
     leave: leaveStory,
-    getState:()=>({mode:state.mode,currentSystem:state.currentSystem,planet:state.planet&&state.planet.name,missionStage:state.missionStage,fuel:state.fuel,maxFuel:state.maxFuel,crew:state.crew,maxCrew:state.maxCrew,fuelRange:fuelRange(),shipAngle:activeShip().angle,planetReveal:state.planetRevealTimer,planetRevealReady:state.planetRevealReady,spaceThemeActive:!spaceTheme.paused,spaceThemeTime:spaceTheme.currentTime,hyperspaceThemeActive:!hyperspaceTheme.paused,hyperspaceThemeTime:hyperspaceTheme.currentTime,orbitTheme:activeOrbitThemeIndex+1,orbitThemeActive:!!activeOrbitTheme&&!activeOrbitTheme.paused,autopilotTarget:state.autopilotTarget&&{...state.autopilotTarget},scans:{...state.scans},scanType:state.scanAnimation.type,mineralCargo:JSON.parse(JSON.stringify(state.mineralCargo)),cargoTradeValue:state.cargoTradeValue,credits:state.credits,constructedShips:state.constructedShips.map(ship=>({...ship})),installedModules:[...state.installedModules],upgrades:{...state.upgrades},communicationContact:state.communicationContact,communicationNode:state.communicationNode,landerAngle:state.lander.angle,landerCrew:state.landerCrew,landerStorageUsed:state.landerStorageUsed,landerHold:state.landerHold.map(item=>({...item})),landerShots:state.landerShots.length,landerDestroyed:state.landerDestroyed,remainingMinerals:state.surfaceNodes.filter(node=>node.type==='mineral'&&!node.collected).length,remainingLifeforms:state.surfaceNodes.filter(node=>node.type==='biological'&&!node.collected&&!node.defeated).length,biologicalData:state.surfaceNodes.filter(node=>node.type==='biological'&&!node.collected&&node.defeated).length,active:storyActive,intro:introRunning}),
+    getState:()=>({mode:state.mode,currentSystem:state.currentSystem,planet:state.planet&&state.planet.name,missionStage:isMilestoneComplete('pioneerInvestigated')?1:0,campaign:JSON.parse(JSON.stringify(state.campaign)),fuel:state.fuel,maxFuel:state.maxFuel,crew:state.crew,maxCrew:state.maxCrew,fuelRange:fuelRange(),shipAngle:activeShip().angle,planetReveal:state.planetRevealTimer,planetRevealReady:state.planetRevealReady,spaceThemeActive:!spaceTheme.paused,spaceThemeTime:spaceTheme.currentTime,hyperspaceThemeActive:!hyperspaceTheme.paused,hyperspaceThemeTime:hyperspaceTheme.currentTime,orbitTheme:activeOrbitThemeIndex+1,orbitThemeActive:!!activeOrbitTheme&&!activeOrbitTheme.paused,autopilotTarget:state.autopilotTarget&&{...state.autopilotTarget},scans:{...state.scans},scanType:state.scanAnimation.type,mineralCargo:JSON.parse(JSON.stringify(state.mineralCargo)),cargoTradeValue:state.cargoTradeValue,credits:state.credits,constructedShips:state.constructedShips.map(ship=>({...ship})),installedModules:[...state.installedModules],upgrades:{...state.upgrades},communicationContact:state.communicationContact,communicationNode:state.communicationNode,landerAngle:state.lander.angle,landerCrew:state.landerCrew,landerStorageUsed:state.landerStorageUsed,landerHold:state.landerHold.map(item=>({...item})),landerShots:state.landerShots.length,landerDestroyed:state.landerDestroyed,remainingMinerals:state.surfaceNodes.filter(node=>node.type==='mineral'&&!node.collected).length,remainingLifeforms:state.surfaceNodes.filter(node=>node.type==='biological'&&!node.collected&&!node.defeated).length,biologicalData:state.surfaceNodes.filter(node=>node.type==='biological'&&!node.collected&&node.defeated).length,active:storyActive,intro:introRunning}),
     setPlayer:(x,y)=>{ const ship=activeShip(); ship.x=x; ship.y=y; ship.vx=0; ship.vy=0; },
-    enterPlanet:(name)=>{ const body=bodies.find(item=>item.name===String(name).toUpperCase()); if(body) enterPlanetSystem(body); },
-    openPlanet:(name)=>{ const body=bodies.find(item=>item.name===String(name).toUpperCase()); if(body){enterPlanetSystem(body);enterPlanetDetail();} },
+    enterPlanet:(name)=>{ const body=currentBodies().find(item=>item.name===String(name).toUpperCase()); if(body) enterPlanetSystem(body); },
+    openPlanet:(name)=>{ const body=currentBodies().find(item=>item.name===String(name).toUpperCase()); if(body){enterPlanetSystem(body);enterPlanetDetail();} },
     dispatchLander,
     enterSurface,
     pause:()=>{storyActive=false;cancelAnimationFrame(frameId);},
@@ -2753,14 +2948,22 @@
     collectFirstMineral:()=>{const node=state.surfaceNodes.find(item=>item.type==='mineral'&&!item.collected);if(node){state.mode='surface';state.scans.mineral=true;state.lander={x:node.x,y:node.y,angle:-Math.PI/2};collectSurfaceNode();}return node;},
     goToFirstLifeform:()=>{const node=state.surfaceNodes.find(item=>item.type==='biological'&&!item.collected&&!item.defeated);if(node){state.mode='surface';state.scans.biological=true;state.lander={x:Math.max(.02,node.x-.09),y:node.y,angle:0};}return node;},
     collectFirstBio:()=>{const node=state.surfaceNodes.find(item=>item.type==='biological'&&!item.collected&&item.defeated);if(node){state.mode='surface';state.scans.biological=true;state.lander={x:node.x,y:node.y,angle:0};collectSurfaceNode();}return node;},
+    goToPioneerWreckage:()=>{const node=state.surfaceNodes.find(item=>item.storyId==='pioneerWreckage'&&!item.collected);if(node){state.mode='surface';state.scans.energy=true;state.lander={x:node.x,y:node.y,angle:0};}return node;},
+    collectPioneerWreckage:()=>{const node=state.surfaceNodes.find(item=>item.storyId==='pioneerWreckage'&&!item.collected);if(node){state.mode='surface';state.scans.energy=true;state.lander={x:node.x,y:node.y,angle:0};collectSurfaceNode();}return node;},
     fireLanderShot,
     advanceLander:updateLander,
     damageLander,
     beginLanderTakeoff,
     advanceTakeoff:updateLanderTakeoff,
-    dockStarbase:()=>{const earth=bodies.find(body=>body.name==='EARTH');if(earth){state.planet=earth;enterStarbase();}},
+    dockStarbase:()=>{const body=currentBodies().find(item=>item.name===STARBASE_SITE.body);if(body){state.planet=body;return enterStarbase();}return false;},
+    commissionStarbase:commissionFirstStarbase,
+    authorizeStarbase:authorizeFirstStarbase,
+    activateShipyard,
+    unlockShipBlueprint,
+    exportSave:createCampaignSaveSnapshot,
     grantCredits:(amount=500)=>{state.credits+=Math.max(0,Number(amount)||0);updateShipyard();updateOutfit();updateUi();return state.credits;},
     setFuel:(amount)=>{state.fuel=Math.max(0,Math.min(state.maxFuel,Number(amount)||0));updateOutfit();updateUi();return state.fuel;},
+    applyFuelSafeguard:applyPreStarbaseFuelSafeguard,
     setCrew:(amount)=>{state.crew=Math.max(0,Math.min(state.maxCrew,Math.floor(Number(amount)||0)));updateShipyard();updateUi();return state.crew;},
     openShipyard,
     buildSelectedShip,
