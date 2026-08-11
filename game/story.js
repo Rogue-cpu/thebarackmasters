@@ -88,15 +88,15 @@
     }],
     'SOURCE III':[{
       type:'energy',storyId:'pioneerTrackingBeacon',x:.67,y:.34,collected:false,value:0,
-      title:'DAMAGED TRACKING BEACON',requires:'departureRelayRecovered'
+      title:'DAMAGED TRACKING BEACON',requires:'departureRelayAnalyzed'
     }],
     'SOURCE V':[{
       type:'energy',storyId:'pioneerNavigationFragment',x:.48,y:.73,collected:false,value:0,
-      title:'PIONEER NAVIGATION FRAGMENT',requires:'trackingBeaconRecovered'
+      title:'PIONEER NAVIGATION FRAGMENT',requires:'trackingBeaconAnalyzed'
     }],
     CHIRON:[{
       type:'energy',storyId:'pioneerWreckage',x:.72,y:.42,collected:false,value:0,
-      title:'PIONEER ONE WRECKAGE',requires:'trailCoordinatesRecovered'
+      title:'PIONEER ONE WRECKAGE',requires:'trailCoordinatesAnalyzed'
     }]
   };
   const CAMPAIGN_SCHEMA_VERSION = 2;
@@ -125,7 +125,33 @@
     {id:'weapons',name:'ION-BOLT GUN',short:'GUN',cost:40,description:'Increases flagship weapon power by 20%.'}
   ];
   const COMMUNICATION_CONTACTS = {
+    sourceLeadership:{
+      access:'source',
+      name:'SOURCE EXPEDITION COUNCIL',
+      title:'PIONEER REVIEW AUTHORITY',
+      location:'SOURCE — FEDERATION LEADERSHIP CHANNEL',
+      portrait:'assets/story/starbase-commander.png?v=briggs-1',
+      alt:'Source expedition leadership channel',
+      greeting:'welcome',
+      nodes:{
+        welcome:{
+          text:()=>state.campaign.story.pendingSourceAnalysis
+            ? 'Vanguard I, your recovered evidence is ready for secure analysis. Transfer the package when prepared.'
+            : (!isMilestoneComplete('pioneerTruthAnalyzed')
+              ? 'Vanguard I, Source leadership is monitoring the Pioneer investigation. Return every recovered clue here for analysis before proceeding.'
+              : 'The truth recovered from Pioneer One has revived Federation support for the expedition. Additional factions will join this channel as the program expands.'),
+          choices:()=>state.campaign.story.pendingSourceAnalysis
+            ? [{label:'Transfer the recovered evidence for analysis.',effect:analyzePendingSourceClue,next:'briefing'},{label:'Review my current orders.',next:'briefing'}]
+            : [{label:'Review my current orders.',next:'briefing'}]
+        },
+        briefing:{
+          text:()=>currentOpeningObjective().text,
+          choices:[{label:'Understood.',action:'close'},{label:'Return to the leadership channel.',next:'welcome'}]
+        }
+      }
+    },
     starbaseCommander:{
+      access:'starbase',
       name:'COMMANDER WALTER BRIGGS',
       title:'TAFTIAN STARBASE COMMANDER',
       location:'TAFTIAN DEEP-SPACE STARBASE',
@@ -184,7 +210,7 @@
     {name:'NEPTUNE', orbit:670, radius:10, color:'#4d70e8', speed:0.034, phase:2.15, moons:[{name:'TRITON',color:'#d2b8a2'},{name:'NEREID',color:'#8d9295'}]}
   ];
   const planetProfiles = {
-    SOURCE:{orbit:'1.00 AU',atmo:'1.08 ATM',temp:'18° C',weather:'CLASS 3',tectonics:'CLASS 3',mass:'1.04 E.S.',radius:'1.02 E.S.',gravity:'1.00 G',day:'1.06 DAYS',tilt:'19.8°',landable:true,palette:['#123f7a','#287cb2','#2c945e','#93aa69','#d7d1ae'],counts:{mineral:6,biological:8,energy:0}},
+    SOURCE:{orbit:'1.00 AU',atmo:'1.08 ATM',temp:'18° C',weather:'CLASS 3',tectonics:'CLASS 3',mass:'1.04 E.S.',radius:'1.02 E.S.',gravity:'1.00 G',day:'1.06 DAYS',tilt:'19.8°',landable:false,palette:['#123f7a','#287cb2','#2c945e','#93aa69','#d7d1ae'],counts:{mineral:0,biological:0,energy:0}},
     TITAINIA:{orbit:'1.68 AU',atmo:'1.42 ATM',temp:'7° C',weather:'CLASS 6',tectonics:'CLASS 2',mass:'2.83 E.S.',radius:'1.74 E.S.',gravity:'0.94 G',day:'1.38 DAYS',tilt:'11.2°',landable:true,palette:['#031f4f','#064d87','#087eb0','#19a8bd','#8be0d1'],counts:{mineral:7,biological:6,energy:0}},
     MERCURY:{orbit:'0.39 AU',atmo:'TRACE',temp:'167° C',weather:'CLASS 0',tectonics:'CLASS 1',mass:'0.055 E.S.',radius:'0.383 E.S.',gravity:'0.38 G',day:'58.6 DAYS',tilt:'0.03°',landable:true,palette:['#402f28','#795343','#b37b55','#d6a473'],counts:{mineral:8,biological:0,energy:0}},
     VENUS:{orbit:'0.72 AU',atmo:'92.0 ATM',temp:'464° C',weather:'CLASS 8',tectonics:'CLASS 5',mass:'0.815 E.S.',radius:'0.949 E.S.',gravity:'0.90 G',day:'243 DAYS',tilt:'177°',landable:true,palette:['#6f321c','#a74e20','#d98632','#f0c267'],counts:{mineral:7,biological:0,energy:0}},
@@ -205,11 +231,15 @@
   ];
   const extraSystemBodies = {
     'SOURCE':[
-      {name:'SOURCE',orbit:170,radius:9,color:'#49a7d4',speed:0.19,phase:0.7,moons:[{name:'FOUNDATION',color:'#b8c5c9'}]},
-      {name:'TITAINIA',orbit:282,radius:15,color:'#168fbd',speed:0.12,phase:3.5,moons:[{name:'TIDE',color:'#d4e3e5'},{name:'DEEPWATCH',color:'#879aa2'}]},
-      {name:'SOURCE III',orbit:390,radius:6,color:'#b6784e',speed:0.082,phase:5.1,moons:[]},
-      {name:'SOURCE IV',orbit:515,radius:12,color:'#a88b67',speed:0.056,phase:2.25,rings:true,moons:[{name:'EMBER',color:'#8e7568'}]},
-      {name:'SOURCE V',orbit:650,radius:8,color:'#7188a4',speed:0.037,phase:4.55,moons:[{name:'WATCH',color:'#a8afb6'}]}
+      {name:'SOURCE',orbit:118,radius:9,color:'#49a7d4',speed:0.24,phase:0.7,moons:[{name:'FOUNDATION',color:'#b8c5c9'}]},
+      {name:'TITAINIA',orbit:202,radius:15,color:'#168fbd',speed:0.16,phase:3.5,moons:[{name:'TIDE',color:'#d4e3e5'},{name:'DEEPWATCH',color:'#879aa2'}]},
+      {name:'SOURCE III',orbit:286,radius:6,color:'#b6784e',speed:0.115,phase:5.1,moons:[]},
+      {name:'SOURCE IV',orbit:368,radius:12,color:'#a88b67',speed:0.086,phase:2.25,rings:true,moons:[{name:'EMBER',color:'#8e7568'}]},
+      {name:'SOURCE V',orbit:448,radius:8,color:'#7188a4',speed:0.067,phase:4.55,moons:[{name:'WATCH',color:'#a8afb6'}]},
+      {name:'SOURCE VI',orbit:525,radius:5,color:'#aa5c42',speed:0.054,phase:1.35,moons:[]},
+      {name:'SOURCE VII',orbit:592,radius:14,color:'#8d6fa8',speed:0.045,phase:5.85,rings:true,moons:[{name:'VEIL',color:'#b7aaca'},{name:'LANTERN',color:'#8f8798'}]},
+      {name:'SOURCE VIII',orbit:654,radius:9,color:'#5b83a3',speed:0.038,phase:2.92,moons:[{name:'PALE',color:'#c3cbd0'}]},
+      {name:'SOURCE IX',orbit:712,radius:7,color:'#66707f',speed:0.032,phase:4.02,moons:[]}
     ],
     'ALPHA CENTAURI':[
       {name:'PROXIMA I',orbit:118,radius:6,color:'#b94c32',speed:0.27,phase:1.2,moons:[]},
@@ -296,10 +326,15 @@
       story:{
         expeditionLaunched:true,
         departureRelayRecovered:false,
+        departureRelayAnalyzed:false,
         trackingBeaconRecovered:false,
+        trackingBeaconAnalyzed:false,
         trailCoordinatesRecovered:false,
+        trailCoordinatesAnalyzed:false,
         pioneerLocated:false,
         pioneerInvestigated:false,
+        pioneerTruthAnalyzed:false,
+        pendingSourceAnalysis:null,
         starbaseAuthorized:false,
         starbaseOperational:false
       },
@@ -332,6 +367,7 @@
         resources:{biologicalData:0,energySignatures:0}
       },
       blueprints:{ships:[],recovered:[]},
+      diplomacy:{sourceContacts:['sourceLeadership'],joinedFactions:[]},
       infrastructure:{
         starbase:{status:'unavailable',system:STARBASE_SITE.system,body:STARBASE_SITE.body},
         outfit:{status:'locked'},
@@ -462,6 +498,7 @@
     starbaseNotice:'',
     communicationContact:null,
     communicationNode:null,
+    communicationReturn:null,
     pickupNotices:[]
   };
 
@@ -534,17 +571,33 @@
       system:HOME_SYSTEM,body:'TITAINIA',title:'THE SILENT PIONEER',
       text:'Leave Source and energy-scan Titainia for traces of Pioneer One.',target:'the submerged telemetry relay on Titainia'
     };
+    if(!isMilestoneComplete('departureRelayAnalyzed')) return {
+      system:HOME_SYSTEM,body:HOME_WORLD,title:'RETURN TO SOURCE',
+      text:'Return the Titainia telemetry relay data to Source leadership for analysis.',target:'Source leadership analysis'
+    };
     if(!isMilestoneComplete('trackingBeaconRecovered')) return {
       system:HOME_SYSTEM,body:'SOURCE III',title:'THE SILENT PIONEER',
       text:'Follow the recovered telemetry trail to Source III.',target:'the damaged tracking beacon on Source III'
+    };
+    if(!isMilestoneComplete('trackingBeaconAnalyzed')) return {
+      system:HOME_SYSTEM,body:HOME_WORLD,title:'RETURN TO SOURCE',
+      text:'Return the damaged tracking beacon data to Source leadership for analysis.',target:'Source leadership analysis'
     };
     if(!isMilestoneComplete('trailCoordinatesRecovered')) return {
       system:HOME_SYSTEM,body:'SOURCE V',title:'THE SILENT PIONEER',
       text:'Search the outer planet Source V for the final segment of Pioneer One\'s route.',target:'the Pioneer navigation fragment on Source V'
     };
+    if(!isMilestoneComplete('trailCoordinatesAnalyzed')) return {
+      system:HOME_SYSTEM,body:HOME_WORLD,title:'RETURN TO SOURCE',
+      text:'Return the recovered navigation fragment to Source leadership for analysis.',target:'Source leadership analysis'
+    };
     if(!isMilestoneComplete('pioneerInvestigated')) return {
       system:PIONEER_WRECK_SITE.system,body:PIONEER_WRECK_SITE.body,title:'THE SILENT PIONEER',
       text:'The recovered route leads to Chiron. Locate and investigate Pioneer One.',target:'Pioneer One wreckage on Chiron'
+    };
+    if(!isMilestoneComplete('pioneerTruthAnalyzed')) return {
+      system:HOME_SYSTEM,body:HOME_WORLD,title:'RETURN TO SOURCE',
+      text:'Return Pioneer One\'s recorder and wreckage findings to Source leadership.',target:'Source leadership final analysis'
     };
     return {
       system:STARBASE_SITE.system,body:STARBASE_SITE.body,title:'A PERMANENT FOOTHOLD',
@@ -563,18 +616,18 @@
     if(node.storyId==='pioneerDepartureRelay'){
       state.campaign.story.departureRelayRecovered=true;
       state.campaign.discoveries.pioneerDepartureRelay=true;
-      invalidateEnergySurvey('SOURCE III');
-      setLog('SCIENCE','A submerged relay on Titainia contains a broken Pioneer One telemetry trail leading to Source III.',8);
+      state.campaign.story.pendingSourceAnalysis='pioneerDepartureRelay';
+      setLog('SCIENCE','The submerged relay contains encrypted Pioneer One telemetry. Return it to Source for analysis.',8);
     }else if(node.storyId==='pioneerTrackingBeacon'){
       state.campaign.story.trackingBeaconRecovered=true;
       state.campaign.discoveries.pioneerTrackingBeacon=true;
-      invalidateEnergySurvey('SOURCE V');
-      setLog('SCIENCE','The damaged beacon preserves another segment of Pioneer One\'s course. The trail continues toward Source V.',8);
+      state.campaign.story.pendingSourceAnalysis='pioneerTrackingBeacon';
+      setLog('SCIENCE','The damaged beacon contains another encrypted route segment. Return it to Source for analysis.',8);
     }else if(node.storyId==='pioneerNavigationFragment'){
       state.campaign.story.trailCoordinatesRecovered=true;
       state.campaign.discoveries.pioneerNavigationFragment=true;
-      invalidateEnergySurvey(PIONEER_WRECK_SITE.body);
-      setLog('SCIENCE','The final navigation fragment identifies Alpha Centauri and Chiron as Pioneer One\'s last destination.',9);
+      state.campaign.story.pendingSourceAnalysis='pioneerNavigationFragment';
+      setLog('SCIENCE','The navigation fragment may identify Pioneer One\'s final destination. Return it to Source for analysis.',9);
     }else if(node.storyId==='pioneerWreckage'){
       return investigatePioneerWreckage();
     }else return false;
@@ -586,9 +639,34 @@
     if(isMilestoneComplete('pioneerInvestigated')) return false;
     Object.assign(state.campaign.story,{pioneerLocated:true,pioneerInvestigated:true});
     Object.assign(state.campaign.discoveries,{pioneerWreckage:true,pioneerRecorder:true});
-    authorizeFirstStarbase();
+    state.campaign.story.pendingSourceAnalysis='pioneerWreckage';
     updateOpeningMissionUi();
-    setLog('SOURCE COMMAND','Pioneer One confirmed. Starbase construction is authorized; a Federation construction flotilla is being dispatched.',12);
+    setLog('LANDER TEAM','Pioneer One confirmed. Its recorder and wreckage findings must be returned to Source for full analysis.',12);
+    return true;
+  }
+
+  function analyzePendingSourceClue(){
+    const pending=state.campaign.story.pendingSourceAnalysis;
+    if(!pending) return false;
+    if(pending==='pioneerDepartureRelay'){
+      state.campaign.story.departureRelayAnalyzed=true;
+      invalidateEnergySurvey('SOURCE III');
+      setLog('SOURCE ANALYSIS','The telemetry resolves to Source III. Search for the damaged tracking beacon.',9);
+    }else if(pending==='pioneerTrackingBeacon'){
+      state.campaign.story.trackingBeaconAnalyzed=true;
+      invalidateEnergySurvey('SOURCE V');
+      setLog('SOURCE ANALYSIS','The beacon points toward Source V. Recover the final navigation fragment.',9);
+    }else if(pending==='pioneerNavigationFragment'){
+      state.campaign.story.trailCoordinatesAnalyzed=true;
+      invalidateEnergySurvey(PIONEER_WRECK_SITE.body);
+      setLog('SOURCE ANALYSIS','The reconstructed route identifies Alpha Centauri and Chiron as Pioneer One\'s final destination.',10);
+    }else if(pending==='pioneerWreckage'){
+      state.campaign.story.pioneerTruthAnalyzed=true;
+      authorizeFirstStarbase();
+      setLog('SOURCE LEADERSHIP','Pioneer One\'s recorder confirms the true scale of the crisis. Federation support is surging; deep-space starbase construction is authorized.',12);
+    }else return false;
+    state.campaign.story.pendingSourceAnalysis=null;
+    updateOpeningMissionUi();
     return true;
   }
 
@@ -1034,9 +1112,10 @@
     const node=contact.nodes[resolvedId];
     state.communicationNode=resolvedId;
     if(communicationText) communicationText.textContent=communicationValue(node.text);
+    const choices=communicationValue(node.choices)||[];
     if(communicationChoices){
       communicationChoices.innerHTML='';
-      (node.choices||[]).forEach((choice,index)=>{
+      choices.forEach((choice,index)=>{
         const button=document.createElement('button');
         button.type='button';
         button.textContent=`${index+1}. ${communicationValue(choice.label)}`;
@@ -1050,7 +1129,8 @@
   function chooseCommunicationChoice(index){
     const contact=COMMUNICATION_CONTACTS[state.communicationContact];
     const node=contact&&contact.nodes[state.communicationNode];
-    const choice=node&&node.choices&&node.choices[index];
+    const choices=node?communicationValue(node.choices)||[]:[];
+    const choice=choices[index];
     if(!choice) return false;
     if(typeof choice.effect==='function') choice.effect();
     if(choice.action==='close') closeCommunication();
@@ -1060,9 +1140,13 @@
 
   function openCommunication(contactId,nodeId){
     const contact=COMMUNICATION_CONTACTS[contactId];
-    if(!contact||!isStarbaseOperational()||!hasCapability('starbaseAccess')) return false;
+    if(!contact) return false;
+    const sourceAccess=contact.access==='source'&&hasCapability('communications')&&state.currentSystem===HOME_SYSTEM&&state.planet&&state.planet.name===HOME_WORLD;
+    const starbaseAccess=contact.access!=='source'&&isStarbaseOperational()&&hasCapability('starbaseAccess');
+    if(!sourceAccess&&!starbaseAccess) return false;
     state.mode='communication';clearKeys();
     state.communicationContact=contactId;
+    state.communicationReturn=sourceAccess?'source':'starbase';
     screen.classList.add('starbase-cinematic-active');
     if(starbaseMenu) starbaseMenu.classList.add('hidden');
     if(shipyardScreen) shipyardScreen.classList.add('hidden');
@@ -1083,7 +1167,19 @@
     if(communicationScreen){communicationScreen.classList.add('hidden');communicationScreen.setAttribute('aria-hidden','true');}
     state.communicationContact=null;
     state.communicationNode=null;
-    returnToStarbase();
+    const destination=state.communicationReturn;
+    state.communicationReturn=null;
+    if(destination==='source'){
+      screen.classList.remove('starbase-cinematic-active');
+      state.mode='planet';
+      Object.assign(state.planetShip,{x:0,y:82,vx:0,vy:24,angle:Math.PI/2});
+      state.transitionLock=1.8;
+      setPlanetOpsVisible(false);
+      if(systemLabel) systemLabel.textContent=`${HOME_SYSTEM} — ${HOME_WORLD}`;
+      if(systemSubLabel) systemSubLabel.textContent='PLANETARY LOCAL SPACE';
+      if(controlsLabel) controlsLabel.innerHTML='W / ↑ THRUST&nbsp;&nbsp; A D / ← → TURN&nbsp;&nbsp; APPROACH SOURCE TO CONTACT LEADERSHIP';
+      updateUi();
+    }else returnToStarbase();
     return true;
   }
 
@@ -1189,6 +1285,7 @@
     state.starbaseNotice = '';
     state.communicationContact = null;
     state.communicationNode = null;
+    state.communicationReturn = null;
     state.pickupNotices = [];
     Object.assign(state.player, {x:215,y:112,vx:0,vy:0,angle:-0.45});
     Object.assign(state.hyper, {x:0,y:0,vx:0,vy:0,angle:0});
@@ -1196,7 +1293,7 @@
     updateOpeningMissionUi();
     if(systemLabel) systemLabel.textContent=`${HOME_SYSTEM} — ${HOME_WORLD}`;
     if(systemSubLabel) systemSubLabel.textContent='PLANETARY LOCAL SPACE';
-    setLog('SOURCE COMMAND', 'Vanguard I, depart the homeworld and search the other planets of the Source system for Pioneer One\'s trail.', 8);
+    setLog('SOURCE COMMAND', 'Vanguard I, search the other planets for Pioneer One\'s trail. Return every recovered clue to Source leadership for analysis.', 9);
     setPlanetOpsVisible(false);
     stopShipyardTheme();
     stopStarbaseTheme();
@@ -1543,7 +1640,10 @@
         ? Math.hypot(state.planetShip.x-STARBASE_SITE.x,state.planetShip.y-STARBASE_SITE.y)
         : Infinity;
       if(starbaseDistance<STARBASE_SITE.radius&&state.transitionLock<=0) enterStarbase();
-      else if(localDistance<24 && state.transitionLock<=0) enterPlanetDetail();
+      else if(localDistance<24 && state.transitionLock<=0){
+        if(state.currentSystem===HOME_SYSTEM&&state.planet&&state.planet.name===HOME_WORLD) enterSourceLeadership();
+        else enterPlanetDetail();
+      }
       else if(localDistance>PLANET_EDGE && state.transitionLock<=0) exitPlanetSystem();
     }else if(state.mode === 'planetDetail'){
       if(interaction) interaction.classList.add('hidden');
@@ -1695,6 +1795,10 @@
 
   function enterPlanetDetail(){
     if(!state.planet) return;
+    if(state.currentSystem===HOME_SYSTEM&&state.planet.name===HOME_WORLD){
+      enterSourceLeadership();
+      return;
+    }
     state.mode = 'planetDetail';
     playOrbitTheme(true);
     if(!state.planetSurveys[state.planet.name]){
@@ -1717,6 +1821,11 @@
     if(systemSubLabel) systemSubLabel.textContent = 'PLANETARY ANALYSIS';
     if(controlsLabel) controlsLabel.textContent = 'PLANETARY ACQUISITION - STAND BY';
     setLog('SCIENCE', `${state.planet.name} visual acquisition in progress.`,3);
+  }
+
+  function enterSourceLeadership(){
+    if(state.currentSystem!==HOME_SYSTEM||!state.planet||state.planet.name!==HOME_WORLD) return false;
+    return openCommunication('sourceLeadership');
   }
 
   function returnToPlanetOrbit(){
@@ -2121,7 +2230,7 @@
     ctx.save(); ctx.translate(x,y); ctx.scale(1,1/tilt);
     ctx.shadowColor = body.color; ctx.shadowBlur = 10/scale;
     ctx.fillStyle = body.color; ctx.beginPath(); ctx.arc(0,0,body.radius/scale*1.15,0,TWO_PI); ctx.fill();
-    if(state.currentSystem===PIONEER_WRECK_SITE.system&&body.name===PIONEER_WRECK_SITE.body&&isMilestoneComplete('trailCoordinatesRecovered')&&!isMilestoneComplete('pioneerInvestigated')){
+    if(state.currentSystem===PIONEER_WRECK_SITE.system&&body.name===PIONEER_WRECK_SITE.body&&isMilestoneComplete('trailCoordinatesAnalyzed')&&!isMilestoneComplete('pioneerInvestigated')){
       const pulse=.55+Math.sin(state.elapsed*4)*.35;
       ctx.shadowBlur=0;ctx.strokeStyle=`rgba(255,76,55,${pulse})`;ctx.lineWidth=2/scale;
       for(let index=0;index<3;index++){ctx.beginPath();ctx.arc(0,0,(body.radius+10+index*8)/scale,0,TWO_PI);ctx.stroke();}
@@ -3058,6 +3167,9 @@
     goToPioneerWreckage:()=>{const node=state.surfaceNodes.find(item=>item.storyId==='pioneerWreckage'&&!item.collected);if(node){state.mode='surface';state.scans.energy=true;state.lander={x:node.x,y:node.y,angle:0};}return node;},
     collectPioneerWreckage:()=>{const node=state.surfaceNodes.find(item=>item.storyId==='pioneerWreckage'&&!item.collected);if(node){state.mode='surface';state.scans.energy=true;state.lander={x:node.x,y:node.y,angle:0};collectSurfaceNode();}return node;},
     collectStoryContact:(storyId)=>{const node=state.surfaceNodes.find(item=>item.storyId===storyId&&!item.collected);if(node&&isStoryEnergyContactAvailable(node)){state.mode='surface';state.scans.energy=true;state.lander={x:node.x,y:node.y,angle:0};collectSurfaceNode();}return node;},
+    analyzePendingSourceClue,
+    enterSourceLeadership,
+    chooseCommunicationChoice,
     fireLanderShot,
     advanceLander:updateLander,
     damageLander,
