@@ -67,7 +67,7 @@
   const EARTH_STARBASE = {x:142,y:-58,radius:18};
   const PLANET_SCAN_DURATION = 2.8;
   const HYPER_FUEL_PER_UNIT = 0.12;
-  const STARMAP_BOUNDS = {left:-850,right:850,top:-600,bottom:600};
+  const STARMAP_BOUNDS = {left:-2050,right:1950,top:-1500,bottom:1500};
   const SCAN_COLORS = {mineral:'#ff3624',energy:'#b84dff',biological:'#3dff62'};
   const SCAN_RGB = {mineral:'255,54,36',energy:'184,77,255',biological:'61,255,98'};
   const MAX_ESCORTS = 12;
@@ -112,11 +112,11 @@
   };
   const lostShip = {x:548, y:-302, name:'PIONEER ONE'};
   const hyperspaceStars = [
-    {name:'SOL', x:0, y:0, color:'#ffe06b', size:12, available:true},
-    {name:'ALPHA CENTAURI', x:-430, y:-255, color:'#ffb15c', size:10, available:true},
-    {name:'SIRIUS', x:520, y:310, color:'#b7d8ff', size:11, available:true},
-    {name:'EPSILON ERIDANI', x:610, y:-420, color:'#ff755e', size:8, available:true},
-    {name:'TAU CETI', x:-650, y:390, color:'#fff0a1', size:8, available:true}
+    {name:'SOL', x:-1150, y:650, color:'#ffe06b', size:12, available:true},
+    {name:'ALPHA CENTAURI', x:-1580, y:395, color:'#ffb15c', size:10, available:true},
+    {name:'SIRIUS', x:-630, y:960, color:'#b7d8ff', size:11, available:true},
+    {name:'EPSILON ERIDANI', x:-540, y:230, color:'#ff755e', size:8, available:true},
+    {name:'TAU CETI', x:-1800, y:1040, color:'#fff0a1', size:8, available:true}
   ];
   const extraSystemBodies = {
     'ALPHA CENTAURI':[
@@ -159,6 +159,7 @@
   let pixelRatio = 1;
   let starfield = [];
   let hyperspaceDust = [];
+  let starmapField = [];
   const terrainCache = {};
   const shipyardTheme = new Audio('assets/music/shipyard-theme.mp3');
   shipyardTheme.loop = true;
@@ -510,9 +511,16 @@
     starfield = Array.from({length:260}, (_,i)=>(
       {x:seededNoise(i*3), y:seededNoise(i*3+1), size:0.4+seededNoise(i*3+2)*1.5, hue:185+seededNoise(i*7)*90}
     ));
-    hyperspaceDust = Array.from({length:180}, (_,i)=>(
-      {x:(seededNoise(i*5)-0.5)*2200, y:(seededNoise(i*5+1)-0.5)*1800, size:0.5+seededNoise(i*5+2)*2.2}
+    hyperspaceDust = Array.from({length:420}, (_,i)=>(
+      {x:STARMAP_BOUNDS.left+seededNoise(i*5)*(STARMAP_BOUNDS.right-STARMAP_BOUNDS.left), y:STARMAP_BOUNDS.top+seededNoise(i*5+1)*(STARMAP_BOUNDS.bottom-STARMAP_BOUNDS.top), size:0.5+seededNoise(i*5+2)*2.2}
     ));
+    const mapColors=['#ff4e45','#61d7ff','#f5df63','#58e56d','#c16cff','#ff9d48','#d7e4ef'];
+    starmapField=Array.from({length:230},(_,index)=>({
+      x:STARMAP_BOUNDS.left+seededNoise(index*11+401)*(STARMAP_BOUNDS.right-STARMAP_BOUNDS.left),
+      y:STARMAP_BOUNDS.top+seededNoise(index*11+402)*(STARMAP_BOUNDS.bottom-STARMAP_BOUNDS.top),
+      size:.65+seededNoise(index*11+403)*1.7,
+      color:mapColors[Math.floor(seededNoise(index*11+404)*mapColors.length)%mapColors.length]
+    }));
   }
 
   function resize(){
@@ -1698,12 +1706,19 @@
     const range=fuelRange();
     ctx.save();
     ctx.strokeStyle='rgba(25,55,155,.48)';ctx.lineWidth=1;
-    for(let x=Math.ceil(STARMAP_BOUNDS.left/100)*100;x<=STARMAP_BOUNDS.right;x+=100){
+    for(let x=Math.ceil(STARMAP_BOUNDS.left/250)*250;x<=STARMAP_BOUNDS.right;x+=250){
       const sx=tr.cx+x*tr.scale;ctx.beginPath();ctx.moveTo(sx,32);ctx.lineTo(sx,viewHeight-30);ctx.stroke();
     }
-    for(let y=Math.ceil(STARMAP_BOUNDS.top/100)*100;y<=STARMAP_BOUNDS.bottom;y+=100){
+    for(let y=Math.ceil(STARMAP_BOUNDS.top/250)*250;y<=STARMAP_BOUNDS.bottom;y+=250){
       const sy=tr.cy+y*tr.scale;ctx.beginPath();ctx.moveTo(28,sy);ctx.lineTo(viewWidth-28,sy);ctx.stroke();
     }
+    ctx.strokeStyle='rgba(68,112,235,.82)';ctx.lineWidth=2;
+    ctx.strokeRect(tr.cx+STARMAP_BOUNDS.left*tr.scale,tr.cy+STARMAP_BOUNDS.top*tr.scale,(STARMAP_BOUNDS.right-STARMAP_BOUNDS.left)*tr.scale,(STARMAP_BOUNDS.bottom-STARMAP_BOUNDS.top)*tr.scale);
+    starmapField.forEach(point=>{
+      const sx=tr.cx+point.x*tr.scale,sy=tr.cy+point.y*tr.scale;
+      ctx.globalAlpha=.45+point.size*.18;ctx.fillStyle=point.color;ctx.fillRect(sx,sy,point.size,point.size);
+    });
+    ctx.globalAlpha=1;
     const px=tr.cx+position.x*tr.scale,py=tr.cy+position.y*tr.scale;
     ctx.fillStyle='rgba(72,225,255,.075)';ctx.strokeStyle='rgba(92,238,255,.58)';ctx.lineWidth=2;ctx.setLineDash([8,7]);
     ctx.beginPath();ctx.arc(px,py,range*tr.scale,0,TWO_PI);ctx.fill();ctx.stroke();ctx.setLineDash([]);
@@ -1725,6 +1740,7 @@
     ctx.translate(px,py);ctx.rotate(state.starmapReturnMode==='hyperspace'?state.hyper.angle:-Math.PI/2);
     ctx.fillStyle='#fff';ctx.shadowColor='#4ff3ff';ctx.shadowBlur=12;ctx.beginPath();ctx.moveTo(10,0);ctx.lineTo(-8,-6);ctx.lineTo(-4,0);ctx.lineTo(-8,6);ctx.closePath();ctx.fill();ctx.restore();
     ctx.fillStyle='#141ac8';ctx.fillRect(0,0,viewWidth,28);ctx.fillStyle='#ff48e1';ctx.font='bold 15px Orbitron, sans-serif';ctx.textAlign='center';ctx.fillText('HYPERSPACE STARMAP',viewWidth/2,19);
+    ctx.font='10px Orbitron, sans-serif';ctx.fillStyle='#ff48e1';ctx.textAlign='right';ctx.fillText(`${Math.round(position.x)} : ${Math.round(position.y)}`,viewWidth-20,19);
     ctx.fillStyle='rgba(4,12,22,.88)';ctx.fillRect(18,viewHeight-52,viewWidth-36,34);ctx.strokeStyle='#2954cf';ctx.strokeRect(18,viewHeight-52,viewWidth-36,34);
     ctx.fillStyle='#79f5ff';ctx.font='10px Orbitron, sans-serif';ctx.textAlign='left';ctx.fillText(`FUEL RANGE ${Math.floor(range)} HS`,30,viewHeight-31);
     ctx.textAlign='right';ctx.fillText('CLICK STAR: PLOT COURSE    ESC: CLOSE',viewWidth-30,viewHeight-31);
