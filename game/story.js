@@ -151,6 +151,8 @@
     scanAnimation:{type:null,elapsed:0,queue:[]},
     surfaceNodes:[],
     landingTimer:0,
+    takeoffTimer:0,
+    takeoffOrigin:{x:0.5,y:0.5},
     surfaceFade:0,
     lander:{x:0.5,y:0.5,angle:-Math.PI/2},
     collected:{mineral:0,biological:0,energy:0},
@@ -462,7 +464,7 @@
     planetOpsButtons.forEach(button=>{
       const action = button.dataset.planetAction;
       button.classList.toggle('active',!!state.scans[action] || state.scanAnimation.type===action);
-      button.disabled = state.mode === 'landing' || (scanning && action!=='exit');
+      button.disabled = state.mode === 'landing' || state.mode === 'takeoff' || (scanning && action!=='exit');
       if(action === 'dispatch') button.disabled = scanning || !profile || !profile.landable || state.mode !== 'planetDetail';
     });
   }
@@ -507,6 +509,8 @@
     state.scanAnimation = {type:null,elapsed:0,queue:[]};
     state.surfaceNodes = [];
     state.landingTimer = 0;
+    state.takeoffTimer = 0;
+    state.takeoffOrigin = {x:0.5,y:0.5};
     state.surfaceFade = 0;
     state.lander = {x:0.5,y:0.5,angle:-Math.PI/2};
     state.collected = {mineral:0,biological:0,energy:0};
@@ -720,6 +724,8 @@
     }else if(state.mode === 'surface'){
       updateLander(dt);
       state.surfaceFade = Math.max(0,state.surfaceFade-dt*0.85);
+    }else if(state.mode === 'takeoff'){
+      updateLanderTakeoff(dt);
     }else if(state.mode === 'starbase'||state.mode==='shipyard'||state.mode==='outfit'){
       if(interaction) interaction.classList.add('hidden');
     }else{
@@ -899,7 +905,7 @@
     state.surfaceFade = 1;
     state.lander = {x:0.5,y:0.5,angle:-Math.PI/2};
     if(systemSubLabel) systemSubLabel.textContent = 'SURFACE EXPEDITION';
-    if(controlsLabel) controlsLabel.textContent = 'W A S D / ARROWS MOVE LANDER    E COLLECT    EXIT PLANET RETURNS TO ORBIT';
+    if(controlsLabel) controlsLabel.textContent = 'W A S D / ARROWS MOVE LANDER    E COLLECT    ESC RECOVER LANDER';
     setLog('LANDER CONTROL','Touchdown confirmed. Surface team standing by.',6);
     refreshPlanetOps();
   }
@@ -923,6 +929,37 @@
       const nearby=state.surfaceNodes.find(node=>!node.collected&&state.scans[node.type]&&Math.hypot(node.x-state.lander.x,node.y-state.lander.y)<=0.045);
       interaction.classList.toggle('hidden',!nearby);
       if(nearby) interaction.textContent=`PRESS E TO COLLECT ${nearby.material||nearby.type.toUpperCase()}`;
+    }
+  }
+
+  function beginLanderTakeoff(){
+    if(state.mode!=='surface') return;
+    clearKeys();
+    state.mode='takeoff';
+    state.takeoffTimer=0;
+    state.takeoffOrigin={x:state.lander.x,y:state.lander.y};
+    state.lander.angle=-Math.PI/2;
+    state.surfaceFade=0;
+    if(interaction) interaction.classList.add('hidden');
+    if(systemSubLabel) systemSubLabel.textContent='LANDER ASCENT';
+    if(controlsLabel) controlsLabel.textContent='LANDER RETURNING TO VANGUARD I';
+    setLog('LANDER CONTROL','Recovery signal received. Lander lifting off for orbital rendezvous.',5);
+    refreshPlanetOps();
+  }
+
+  function updateLanderTakeoff(dt){
+    state.takeoffTimer+=dt;
+    state.lander.angle=-Math.PI/2;
+    state.surfaceFade=Math.max(0,Math.min(1,(state.takeoffTimer-1.95)/0.72));
+    if(state.takeoffTimer>=2.75){
+      state.mode='planetDetail';
+      state.surfaceFade=0;
+      state.takeoffTimer=0;
+      state.lander={x:0.5,y:0.5,angle:-Math.PI/2};
+      if(systemSubLabel) systemSubLabel.textContent='PLANETARY ANALYSIS';
+      if(controlsLabel) controlsLabel.textContent='SELECT A SCAN OR DISPATCH THE PLANET LANDER';
+      setLog('LANDER CONTROL','Lander recovered aboard Vanguard I. Orbital operations restored.',5);
+      refreshPlanetOps();
     }
   }
 
@@ -981,9 +1018,9 @@
       distanceLabel.textContent=String(state.credits);
       return;
     }
-    if(['planet','planetDetail','landing','surface'].includes(state.mode)){
+    if(['planet','planetDetail','landing','surface','takeoff'].includes(state.mode)){
       if(distanceTitle) distanceTitle.textContent = 'LOCAL SPACE';
-      if(state.mode === 'surface'){
+      if(state.mode === 'surface'||state.mode==='takeoff'){
         const total = state.collected.mineral+state.collected.biological+state.collected.energy;
         distanceLabel.textContent = `RECOVERED ${total}`;
       }else distanceLabel.textContent = state.planet ? state.planet.name : 'PLANET';
@@ -1361,14 +1398,28 @@
     const topRect={x:16,y:32,w:viewWidth-32,h:viewHeight*0.56};
     const sensorRect={x:16,y:topRect.y+topRect.h+12,w:viewWidth-32,h:viewHeight-(topRect.y+topRect.h+28)};
     const cropW=terrain.width*0.42,cropH=terrain.height*0.42;
-    const sx=Math.max(0,Math.min(terrain.width-cropW,state.lander.x*terrain.width-cropW/2));
-    const sy=Math.max(0,Math.min(terrain.height-cropH,state.lander.y*terrain.height-cropH/2));
+    const camera=state.mode==='takeoff'?state.takeoffOrigin:state.lander;
+    const sx=Math.max(0,Math.min(terrain.width-cropW,camera.x*terrain.width-cropW/2));
+    const sy=Math.max(0,Math.min(terrain.height-cropH,camera.y*terrain.height-cropH/2));
     ctx.drawImage(terrain,sx,sy,cropW,cropH,topRect.x,topRect.y,topRect.w,topRect.h);
     ctx.drawImage(terrain,sensorRect.x,sensorRect.y,sensorRect.w,sensorRect.h);
     drawSurfaceContacts(topRect,terrain,sx,sy,cropW,cropH);
     ctx.strokeStyle='#687684';ctx.lineWidth=3;ctx.strokeRect(topRect.x,topRect.y,topRect.w,topRect.h);ctx.strokeRect(sensorRect.x,sensorRect.y,sensorRect.w,sensorRect.h);
     drawScanNodes(sensorRect,true);
-    drawLanderIcon(topRect.x+topRect.w/2,topRect.y+topRect.h/2,1,state.lander.angle);
+    if(state.mode==='takeoff'){
+      const progress=Math.min(1,state.takeoffTimer/2.45);
+      const rise=Math.pow(progress,1.45)*topRect.h*0.82;
+      const landerX=topRect.x+topRect.w/2;
+      const landerY=topRect.y+topRect.h/2-rise;
+      for(let trail=5;trail>=1;trail--){
+        const alpha=(1-progress)*0.035+trail*0.025;
+        ctx.fillStyle=`rgba(83,238,255,${alpha})`;
+        ctx.beginPath();ctx.arc(landerX,landerY+trail*13,4+trail*2.4,0,TWO_PI);ctx.fill();
+      }
+      drawLanderIcon(landerX,landerY,1+progress*0.42,-Math.PI/2);
+      ctx.save();ctx.textAlign='center';ctx.font='bold 13px Orbitron, sans-serif';ctx.fillStyle='#8cffff';ctx.shadowColor='#23e8ff';ctx.shadowBlur=12;
+      ctx.fillText('ASCENT TO VANGUARD I',topRect.x+topRect.w/2,topRect.y+topRect.h-18);ctx.restore();
+    }else drawLanderIcon(topRect.x+topRect.w/2,topRect.y+topRect.h/2,1,state.lander.angle);
     state.pickupNotices.forEach((notice,index)=>{
       const progress=notice.age/notice.duration;
       ctx.save();ctx.globalAlpha=Math.max(0,1-progress);
@@ -1453,7 +1504,7 @@
     else if(state.mode === 'planet') drawPlanetSystem();
     else if(state.mode === 'planetDetail') drawPlanetDetail();
     else if(state.mode === 'landing') drawLanding();
-    else if(state.mode === 'surface') drawSurface();
+    else if(state.mode === 'surface'||state.mode==='takeoff') drawSurface();
     else if(state.mode === 'starbase'||state.mode==='shipyard'||state.mode==='outfit') drawStarbase();
     else drawSystem();
     ctx.fillStyle = state.mode === 'hyperspace' ? 'rgba(255,20,10,0.035)' : 'rgba(0,40,90,0.035)';
@@ -1489,6 +1540,12 @@
       else if(event.key==='ArrowRight'||key==='d') cycleOutfit(1);
       else if(event.key==='Enter'||key==='e') installSelectedModule();
       else if(key==='escape') returnToStarbase();
+      event.preventDefault();return;
+    }
+    if(key==='escape'&&state.mode==='surface'){
+      event.preventDefault();beginLanderTakeoff();return;
+    }
+    if(key==='escape'&&state.mode==='takeoff'){
       event.preventDefault();return;
     }
     if(key === 'escape') { event.preventDefault(); leaveStory(); return; }
@@ -1612,12 +1669,8 @@
     }else if(action==='dispatch') dispatchLander();
     else if(action==='exit'){
       if(state.mode==='surface'){
-        state.mode='planetDetail';
-        state.surfaceFade=0;
-        if(systemSubLabel) systemSubLabel.textContent='PLANETARY ANALYSIS';
-        if(controlsLabel) controlsLabel.textContent='SELECT A SCAN OR DISPATCH THE PLANET LANDER';
-        setLog('LANDER CONTROL','Lander recovered. Orbital operations restored.',5);
-        refreshPlanetOps();
+        beginLanderTakeoff();
+        return;
       }else if(state.mode==='planetDetail') returnToPlanetOrbit();
     }
   }
