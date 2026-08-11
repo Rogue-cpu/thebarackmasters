@@ -80,17 +80,17 @@
   const STARBASE_SITE = {system:'ALPHA CENTAURI',body:'CHIRON',x:142,y:-58,radius:18};
   const PIONEER_WRECK_SITE = {system:'ALPHA CENTAURI',body:'CHIRON',name:'PIONEER ONE'};
   const HOME_SYSTEM = 'SOURCE';
-  const HOME_WORLD = 'TAFTIA';
+  const HOME_WORLD = 'SOURCE';
   const STORY_ENERGY_CONTACTS = {
-    TAFTIA:[{
+    TITAINIA:[{
       type:'energy',storyId:'pioneerDepartureRelay',x:.31,y:.58,collected:false,value:0,
-      title:'PIONEER DEPARTURE RELAY',requires:null
+      title:'SUBMERGED TELEMETRY RELAY',requires:null
     }],
-    'SOURCE II':[{
+    'SOURCE III':[{
       type:'energy',storyId:'pioneerTrackingBeacon',x:.67,y:.34,collected:false,value:0,
       title:'DAMAGED TRACKING BEACON',requires:'departureRelayRecovered'
     }],
-    'SOURCE III':[{
+    'SOURCE V':[{
       type:'energy',storyId:'pioneerNavigationFragment',x:.48,y:.73,collected:false,value:0,
       title:'PIONEER NAVIGATION FRAGMENT',requires:'trackingBeaconRecovered'
     }],
@@ -184,6 +184,8 @@
     {name:'NEPTUNE', orbit:670, radius:10, color:'#4d70e8', speed:0.034, phase:2.15, moons:[{name:'TRITON',color:'#d2b8a2'},{name:'NEREID',color:'#8d9295'}]}
   ];
   const planetProfiles = {
+    SOURCE:{orbit:'1.00 AU',atmo:'1.08 ATM',temp:'18° C',weather:'CLASS 3',tectonics:'CLASS 3',mass:'1.04 E.S.',radius:'1.02 E.S.',gravity:'1.00 G',day:'1.06 DAYS',tilt:'19.8°',landable:true,palette:['#123f7a','#287cb2','#2c945e','#93aa69','#d7d1ae'],counts:{mineral:6,biological:8,energy:0}},
+    TITAINIA:{orbit:'1.68 AU',atmo:'1.42 ATM',temp:'7° C',weather:'CLASS 6',tectonics:'CLASS 2',mass:'2.83 E.S.',radius:'1.74 E.S.',gravity:'0.94 G',day:'1.38 DAYS',tilt:'11.2°',landable:true,palette:['#031f4f','#064d87','#087eb0','#19a8bd','#8be0d1'],counts:{mineral:7,biological:6,energy:0}},
     MERCURY:{orbit:'0.39 AU',atmo:'TRACE',temp:'167° C',weather:'CLASS 0',tectonics:'CLASS 1',mass:'0.055 E.S.',radius:'0.383 E.S.',gravity:'0.38 G',day:'58.6 DAYS',tilt:'0.03°',landable:true,palette:['#402f28','#795343','#b37b55','#d6a473'],counts:{mineral:8,biological:0,energy:0}},
     VENUS:{orbit:'0.72 AU',atmo:'92.0 ATM',temp:'464° C',weather:'CLASS 8',tectonics:'CLASS 5',mass:'0.815 E.S.',radius:'0.949 E.S.',gravity:'0.90 G',day:'243 DAYS',tilt:'177°',landable:true,palette:['#6f321c','#a74e20','#d98632','#f0c267'],counts:{mineral:7,biological:0,energy:0}},
     EARTH:{orbit:'1.00 AU',atmo:'1.00 ATM',temp:'15° C',weather:'CLASS 4',tectonics:'CLASS 3',mass:'1.000 E.S.',radius:'1.000 E.S.',gravity:'1.00 G',day:'1.00 DAY',tilt:'23.4°',landable:true,palette:['#073c72','#1265a0','#218c50','#91a85b','#d5d2b1'],counts:{mineral:6,biological:8,energy:0}},
@@ -203,9 +205,11 @@
   ];
   const extraSystemBodies = {
     'SOURCE':[
-      {name:'TAFTIA',orbit:180,radius:9,color:'#49a7d4',speed:0.18,phase:0.7,moons:[{name:'FOUNDATION',color:'#b8c5c9'}]},
-      {name:'SOURCE II',orbit:302,radius:7,color:'#b6784e',speed:0.11,phase:3.5,moons:[]},
-      {name:'SOURCE III',orbit:438,radius:10,color:'#73855e',speed:0.065,phase:5.1,moons:[{name:'WATCH',color:'#94958d'}]}
+      {name:'SOURCE',orbit:170,radius:9,color:'#49a7d4',speed:0.19,phase:0.7,moons:[{name:'FOUNDATION',color:'#b8c5c9'}]},
+      {name:'TITAINIA',orbit:282,radius:15,color:'#168fbd',speed:0.12,phase:3.5,moons:[{name:'TIDE',color:'#d4e3e5'},{name:'DEEPWATCH',color:'#879aa2'}]},
+      {name:'SOURCE III',orbit:390,radius:6,color:'#b6784e',speed:0.082,phase:5.1,moons:[]},
+      {name:'SOURCE IV',orbit:515,radius:12,color:'#a88b67',speed:0.056,phase:2.25,rings:true,moons:[{name:'EMBER',color:'#8e7568'}]},
+      {name:'SOURCE V',orbit:650,radius:8,color:'#7188a4',speed:0.037,phase:4.55,moons:[{name:'WATCH',color:'#a8afb6'}]}
     ],
     'ALPHA CENTAURI':[
       {name:'PROXIMA I',orbit:118,radius:6,color:'#b94c32',speed:0.27,phase:1.2,moons:[]},
@@ -527,16 +531,16 @@
 
   function currentOpeningObjective(){
     if(!isMilestoneComplete('departureRelayRecovered')) return {
-      system:HOME_SYSTEM,body:HOME_WORLD,title:'THE SILENT PIONEER',
-      text:'Energy-scan Taftia for Pioneer One\'s outbound telemetry relay.',target:'the Pioneer departure relay on Taftia'
+      system:HOME_SYSTEM,body:'TITAINIA',title:'THE SILENT PIONEER',
+      text:'Leave Source and energy-scan Titainia for traces of Pioneer One.',target:'the submerged telemetry relay on Titainia'
     };
     if(!isMilestoneComplete('trackingBeaconRecovered')) return {
-      system:HOME_SYSTEM,body:'SOURCE II',title:'THE SILENT PIONEER',
-      text:'Follow the recovered telemetry trail to Source II.',target:'the damaged tracking beacon on Source II'
+      system:HOME_SYSTEM,body:'SOURCE III',title:'THE SILENT PIONEER',
+      text:'Follow the recovered telemetry trail to Source III.',target:'the damaged tracking beacon on Source III'
     };
     if(!isMilestoneComplete('trailCoordinatesRecovered')) return {
-      system:HOME_SYSTEM,body:'SOURCE III',title:'THE SILENT PIONEER',
-      text:'Search Source III for the missing final segment of Pioneer One\'s route.',target:'the Pioneer navigation fragment on Source III'
+      system:HOME_SYSTEM,body:'SOURCE V',title:'THE SILENT PIONEER',
+      text:'Search the outer planet Source V for the final segment of Pioneer One\'s route.',target:'the Pioneer navigation fragment on Source V'
     };
     if(!isMilestoneComplete('pioneerInvestigated')) return {
       system:PIONEER_WRECK_SITE.system,body:PIONEER_WRECK_SITE.body,title:'THE SILENT PIONEER',
@@ -559,13 +563,13 @@
     if(node.storyId==='pioneerDepartureRelay'){
       state.campaign.story.departureRelayRecovered=true;
       state.campaign.discoveries.pioneerDepartureRelay=true;
-      invalidateEnergySurvey('SOURCE II');
-      setLog('SCIENCE','Pioneer One\'s departure relay contains a broken telemetry trail leading to Source II.',8);
+      invalidateEnergySurvey('SOURCE III');
+      setLog('SCIENCE','A submerged relay on Titainia contains a broken Pioneer One telemetry trail leading to Source III.',8);
     }else if(node.storyId==='pioneerTrackingBeacon'){
       state.campaign.story.trackingBeaconRecovered=true;
       state.campaign.discoveries.pioneerTrackingBeacon=true;
-      invalidateEnergySurvey('SOURCE III');
-      setLog('SCIENCE','The damaged beacon preserves another segment of Pioneer One\'s course. The trail continues to Source III.',8);
+      invalidateEnergySurvey('SOURCE V');
+      setLog('SCIENCE','The damaged beacon preserves another segment of Pioneer One\'s course. The trail continues toward Source V.',8);
     }else if(node.storyId==='pioneerNavigationFragment'){
       state.campaign.story.trailCoordinatesRecovered=true;
       state.campaign.discoveries.pioneerNavigationFragment=true;
@@ -1192,7 +1196,7 @@
     updateOpeningMissionUi();
     if(systemLabel) systemLabel.textContent=`${HOME_SYSTEM} — ${HOME_WORLD}`;
     if(systemSubLabel) systemSubLabel.textContent='PLANETARY LOCAL SPACE';
-    setLog('SOURCE COMMAND', 'Vanguard I, begin at Taftia. Search the Source system for the trail left by Pioneer One.', 8);
+    setLog('SOURCE COMMAND', 'Vanguard I, depart the homeworld and search the other planets of the Source system for Pioneer One\'s trail.', 8);
     setPlanetOpsVisible(false);
     stopShipyardTheme();
     stopStarbaseTheme();
