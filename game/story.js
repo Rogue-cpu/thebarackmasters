@@ -132,31 +132,42 @@
   const COMMUNICATION_CONTACTS = {
     sourceLeadership:{
       access:'source',
-      name:'SOURCE EXPEDITION COUNCIL',
-      title:'PIONEER REVIEW AUTHORITY',
-      location:'SOURCE — FEDERATION LEADERSHIP CHANNEL',
-      portrait:'assets/story/starbase-commander.png?v=briggs-1',
-      alt:'Source expedition leadership channel',
+      faction:'taftian',
+      name:'MISSION DIRECTOR',
+      title:'TAFTIAN PIONEER EXPEDITION',
+      location:'SOURCE — TAFTIAN MISSION CONTROL',
+      portrait:'assets/story/commander-walter-closed.png',
+      portraits:[
+        'assets/story/commander-walter-closed.png',
+        'assets/story/commander-walter-mouth-mid.png',
+        'assets/story/commander-walter-mouth-open.png'
+      ],
+      voice:{rate:.92,pitch:.82,volume:1},
+      alt:'Taftian Mission Director aboard Source Mission Control',
       greeting:'welcome',
       nodes:{
         welcome:{
           text:()=>state.campaign.story.pendingSourceAnalysis
-            ? 'Vanguard I, your recovered evidence is ready for secure analysis. Transfer the package when prepared.'
+            ? 'Vanguard I, Mission Control confirms that your recovered evidence has arrived intact. Transfer the package through the secure channel and my analysis team will begin reconstruction immediately. We will compare it against Pioneer One telemetry, launch records, and every signal fragment still in the archive. Do not depart for the next search area until we know exactly what this clue is telling us.'
             : (!isMilestoneComplete('pioneerTruthAnalyzed')
-              ? 'Vanguard I, Source leadership is monitoring the Pioneer investigation. Return every recovered clue here for analysis before proceeding.'
-              : 'The truth recovered from Pioneer One has revived Federation support for the expedition. Additional factions will join this channel as the program expands.'),
+              ? 'Vanguard I, this is the Mission Director. Source is monitoring the Pioneer investigation, but you are the only vessel close enough to follow its trail. Search the assigned worlds carefully and use your energy scanner to identify deliberate signals, structures, or wreckage. Every recovered clue must be returned here for authenticated analysis before Mission Control can authorize the next stage of the search.'
+              : 'Vanguard I, the truth recovered from Pioneer One has changed everything. The expedition is no longer a fading search operation maintained by a handful of loyal personnel. Federation departments are reopening their budgets, new factions are requesting seats in Mission Control, and the first permanent deep-space infrastructure is being planned. We have momentum now, but we must turn it into a program capable of surviving what comes next.'),
           choices:()=>state.campaign.story.pendingSourceAnalysis
             ? [{label:'Transfer the recovered evidence for analysis.',effect:analyzePendingSourceClue,next:'briefing'},{label:'Review my current orders.',next:'briefing'}]
             : [{label:'Review my current orders.',next:'briefing'}]
         },
         briefing:{
-          text:()=>currentOpeningObjective().text,
+          text:()=>{
+            const objective=currentOpeningObjective();
+            return `Your current directive is as follows: ${objective.text} Pioneer One's route is being reconstructed one verified segment at a time. Complete only the assigned search, preserve anything you discover, and return all significant evidence to Source. Mission Control will analyze the material and issue your next destination once the result has been authenticated.`;
+          },
           choices:[{label:'Understood.',action:'close'},{label:'Return to the leadership channel.',next:'welcome'}]
         }
       }
     },
     starbaseCommander:{
       access:'starbase',
+      faction:'taftian',
       name:'COMMANDER WALTER BRIGGS',
       title:'TAFTIAN STARBASE COMMANDER',
       location:'TAFTIAN DEEP-SPACE STARBASE',
@@ -301,6 +312,7 @@
   let communicationSpeechPosition = 0;
   let communicationSpeechToken = 0;
   let communicationSpeechTimer = 0;
+  let communicationSpeechStartTimer = 0;
   let communicationMouthTimer = 0;
   let communicationSpeechPaused = false;
   let communicationSpeechElapsed = 0;
@@ -318,6 +330,9 @@
   shipyardTheme.loop = true;
   const starbaseTheme = new Audio('assets/music/starbase-theme.mp3');
   starbaseTheme.loop = true;
+  const taftianCommunicationTheme = new Audio('assets/music/taftian-communication-theme.mp3');
+  taftianCommunicationTheme.loop = true;
+  taftianCommunicationTheme.preload = 'metadata';
   const orbitThemes = [1,2,3,4,5].map(index=>{
     const theme=new Audio(`assets/music/orbit-${index}.mp3`);
     theme.preload='metadata';
@@ -728,6 +743,7 @@
   }
 
   function playShipyardTheme(){
+    stopTaftianCommunicationTheme();
     stopStarbaseTheme();
     stopSpaceTheme();
     stopHyperspaceTheme();
@@ -744,6 +760,7 @@
   }
 
   function playStarbaseTheme(){
+    stopTaftianCommunicationTheme();
     stopShipyardTheme();
     stopSpaceTheme();
     stopHyperspaceTheme();
@@ -777,6 +794,7 @@
     stopStarbaseTheme();
     stopHyperspaceTheme();
     stopOrbitTheme();
+    stopTaftianCommunicationTheme();
     stopSpaceTheme();
     try{
       if(restart) spaceTheme.currentTime=0;
@@ -796,6 +814,7 @@
     stopStarbaseTheme();
     stopOrbitTheme();
     stopSpaceTheme();
+    stopTaftianCommunicationTheme();
     stopHyperspaceTheme();
     try{
       if(restart) hyperspaceTheme.currentTime=0;
@@ -815,6 +834,7 @@
     stopStarbaseTheme();
     stopSpaceTheme();
     stopHyperspaceTheme();
+    stopTaftianCommunicationTheme();
     if(!selectNew&&activeOrbitTheme&&!activeOrbitTheme.paused) return;
     if(activeOrbitTheme){try{activeOrbitTheme.pause();activeOrbitTheme.currentTime=0;}catch(err){}}
     let nextIndex=Math.floor(Math.random()*orbitThemes.length);
@@ -835,6 +855,24 @@
     if(!activeOrbitTheme) return;
     try{activeOrbitTheme.pause();activeOrbitTheme.currentTime=0;}catch(err){}
     activeOrbitTheme=null;
+  }
+
+  function playTaftianCommunicationTheme(restart=true){
+    stopShipyardTheme();
+    stopStarbaseTheme();
+    stopSpaceTheme();
+    stopHyperspaceTheme();
+    stopOrbitTheme();
+    try{
+      if(restart) taftianCommunicationTheme.currentTime=0;
+      taftianCommunicationTheme.volume=typeof getMusicVolume==='function'?getMusicVolume(.42):.34;
+      const attempt=taftianCommunicationTheme.play();
+      if(attempt&&typeof attempt.catch==='function') attempt.catch(()=>{});
+    }catch(err){}
+  }
+
+  function stopTaftianCommunicationTheme(reset=true){
+    try{taftianCommunicationTheme.pause();if(reset)taftianCommunicationTheme.currentTime=0;}catch(err){}
   }
 
   orbitThemes.forEach(theme=>theme.addEventListener('ended',()=>{
@@ -1185,6 +1223,7 @@
   function stopCommunicationSpeech(reset=false){
     communicationSpeechToken+=1;
     clearInterval(communicationSpeechTimer);communicationSpeechTimer=0;
+    clearTimeout(communicationSpeechStartTimer);communicationSpeechStartTimer=0;
     stopCommunicationMouth();
     communicationUtterance=null;
     communicationSpeechPaused=false;
@@ -1204,7 +1243,7 @@
       if(communicationPlay) communicationPlay.disabled=true;
       return false;
     }
-    if(communicationPlay){communicationPlay.disabled=false;communicationPlay.textContent='PAUSE';}
+    if(communicationPlay){communicationPlay.disabled=false;communicationPlay.textContent='STARTING...';}
     const token=++communicationSpeechToken;
     const contact=COMMUNICATION_CONTACTS[state.communicationContact]||{};
     const voiceSettings=contact.voice||{};
@@ -1218,8 +1257,21 @@
     communicationSpeechStart=communicationSpeechPosition;
     communicationSpeechElapsed=0;
     communicationSpeechEstimate=Math.max(1200,communicationDuration(utterance.text)*1000/utterance.rate);
-    communicationSpeechLastTick=performance.now();
-    utterance.onstart=()=>{if(token===communicationSpeechToken) startCommunicationMouth();};
+    communicationSpeechLastTick=0;
+    utterance.onstart=()=>{
+      if(token!==communicationSpeechToken) return;
+      clearTimeout(communicationSpeechStartTimer);communicationSpeechStartTimer=0;
+      communicationSpeechLastTick=performance.now();
+      startCommunicationMouth();
+      if(communicationPlay) communicationPlay.textContent='PAUSE';
+      communicationSpeechTimer=setInterval(()=>{
+        if(token!==communicationSpeechToken||communicationSpeechPaused) return;
+        const now=performance.now();communicationSpeechElapsed+=now-communicationSpeechLastTick;communicationSpeechLastTick=now;
+        const progress=Math.min(.985,communicationSpeechElapsed/communicationSpeechEstimate);
+        communicationSpeechPosition=Math.max(communicationSpeechPosition,communicationSpeechStart+(fullText.length-communicationSpeechStart)*progress);
+        updateCommunicationTimeline();
+      },100);
+    };
     utterance.onboundary=event=>{
       if(token!==communicationSpeechToken) return;
       communicationSpeechPosition=Math.max(communicationSpeechPosition,communicationSpeechStart+(event.charIndex||0));
@@ -1227,6 +1279,7 @@
     };
     utterance.onend=()=>{
       if(token!==communicationSpeechToken) return;
+      clearTimeout(communicationSpeechStartTimer);communicationSpeechStartTimer=0;
       clearInterval(communicationSpeechTimer);communicationSpeechTimer=0;
       communicationSpeechPosition=fullText.length;
       communicationUtterance=null;
@@ -1236,18 +1289,24 @@
     };
     utterance.onerror=()=>{
       if(token!==communicationSpeechToken) return;
+      clearTimeout(communicationSpeechStartTimer);communicationSpeechStartTimer=0;
       clearInterval(communicationSpeechTimer);communicationSpeechTimer=0;
       communicationUtterance=null;stopCommunicationMouth();
       if(communicationPlay) communicationPlay.textContent='PLAY';
     };
-    communicationSpeechTimer=setInterval(()=>{
-      if(token!==communicationSpeechToken||communicationSpeechPaused) return;
-      const now=performance.now();communicationSpeechElapsed+=now-communicationSpeechLastTick;communicationSpeechLastTick=now;
-      const progress=Math.min(.985,communicationSpeechElapsed/communicationSpeechEstimate);
-      communicationSpeechPosition=Math.max(communicationSpeechPosition,communicationSpeechStart+(fullText.length-communicationSpeechStart)*progress);
-      updateCommunicationTimeline();
-    },100);
+    window.speechSynthesis.resume();
     window.speechSynthesis.speak(utterance);
+    communicationSpeechStartTimer=setTimeout(()=>{
+      if(token!==communicationSpeechToken||window.speechSynthesis.speaking) return;
+      communicationSpeechToken+=1;
+      window.speechSynthesis.cancel();
+      communicationUtterance=null;
+      communicationSpeechPaused=false;
+      communicationSpeechPosition=communicationSpeechStart;
+      stopCommunicationMouth();
+      if(communicationPlay) communicationPlay.textContent='PLAY';
+      updateCommunicationTimeline();
+    },2200);
     return true;
   }
 
@@ -1260,6 +1319,11 @@
 
   function toggleCommunicationSpeech(){
     if(!communicationSpeechText||!('speechSynthesis' in window)) return false;
+    if(communicationUtterance&&!window.speechSynthesis.speaking&&!communicationSpeechPaused){
+      const position=communicationSpeechPosition;
+      stopCommunicationSpeech(false);
+      return speakCommunicationText(communicationSpeechText,position);
+    }
     if(communicationUtterance&&!communicationSpeechPaused){
       window.speechSynthesis.pause();communicationSpeechPaused=true;stopCommunicationMouth();
       if(communicationPlay) communicationPlay.textContent='RESUME';
@@ -1317,6 +1381,7 @@
     state.mode='communication';clearKeys();
     state.communicationContact=contactId;
     state.communicationReturn=sourceAccess?'source':'starbase';
+    if(contact.faction==='taftian') playTaftianCommunicationTheme(true);
     screen.classList.add('starbase-cinematic-active');
     if(starbaseMenu) starbaseMenu.classList.add('hidden');
     if(shipyardScreen) shipyardScreen.classList.add('hidden');
@@ -1350,6 +1415,7 @@
       if(systemLabel) systemLabel.textContent=`${HOME_SYSTEM} — ${HOME_WORLD}`;
       if(systemSubLabel) systemSubLabel.textContent='PLANETARY LOCAL SPACE';
       if(controlsLabel) controlsLabel.innerHTML='W / ↑ THRUST&nbsp;&nbsp; A D / ← → TURN&nbsp;&nbsp; APPROACH SOURCE TO CONTACT LEADERSHIP';
+      playSpaceTheme(true);
       updateUi();
     }else returnToStarbase();
     return true;
@@ -1410,6 +1476,7 @@
 
   function resetStory(){
     stopCommunicationSpeech(true);
+    stopTaftianCommunicationTheme();
     state.mode = 'planet';
     state.currentSystem = HOME_SYSTEM;
     state.starmapReturnMode = 'planet';
@@ -1570,6 +1637,7 @@
     introFinishing = false;
     storyActive = false;
     stopCommunicationSpeech(true);
+    stopTaftianCommunicationTheme();
     stopShipyardTheme();
     stopStarbaseTheme();
     stopOrbitTheme();
@@ -3332,7 +3400,7 @@
     start: startSystemGame,
     finishIntro,
     leave: leaveStory,
-    getState:()=>({mode:state.mode,currentSystem:state.currentSystem,planet:state.planet&&state.planet.name,missionStage:isMilestoneComplete('pioneerInvestigated')?1:0,campaign:JSON.parse(JSON.stringify(state.campaign)),fuel:state.fuel,maxFuel:state.maxFuel,crew:state.crew,maxCrew:state.maxCrew,fuelRange:fuelRange(),shipAngle:activeShip().angle,planetReveal:state.planetRevealTimer,planetRevealReady:state.planetRevealReady,spaceThemeActive:!spaceTheme.paused,spaceThemeTime:spaceTheme.currentTime,hyperspaceThemeActive:!hyperspaceTheme.paused,hyperspaceThemeTime:hyperspaceTheme.currentTime,orbitTheme:activeOrbitThemeIndex+1,orbitThemeActive:!!activeOrbitTheme&&!activeOrbitTheme.paused,autopilotTarget:state.autopilotTarget&&{...state.autopilotTarget},scans:{...state.scans},scanType:state.scanAnimation.type,mineralCargo:JSON.parse(JSON.stringify(state.mineralCargo)),cargoTradeValue:state.cargoTradeValue,credits:state.credits,constructedShips:state.constructedShips.map(ship=>({...ship})),installedModules:[...state.installedModules],upgrades:{...state.upgrades},communicationContact:state.communicationContact,communicationNode:state.communicationNode,landerAngle:state.lander.angle,landerCrew:state.landerCrew,landerStorageUsed:state.landerStorageUsed,landerHold:state.landerHold.map(item=>({...item})),landerShots:state.landerShots.length,landerDestroyed:state.landerDestroyed,energyContacts:state.surfaceNodes.filter(node=>node.type==='energy').map(node=>({storyId:node.storyId,available:isStoryEnergyContactAvailable(node),collected:node.collected})),remainingMinerals:state.surfaceNodes.filter(node=>node.type==='mineral'&&!node.collected).length,remainingLifeforms:state.surfaceNodes.filter(node=>node.type==='biological'&&!node.collected&&!node.defeated).length,biologicalData:state.surfaceNodes.filter(node=>node.type==='biological'&&!node.collected&&node.defeated).length,active:storyActive,intro:introRunning}),
+    getState:()=>({mode:state.mode,currentSystem:state.currentSystem,planet:state.planet&&state.planet.name,missionStage:isMilestoneComplete('pioneerInvestigated')?1:0,campaign:JSON.parse(JSON.stringify(state.campaign)),fuel:state.fuel,maxFuel:state.maxFuel,crew:state.crew,maxCrew:state.maxCrew,fuelRange:fuelRange(),shipAngle:activeShip().angle,planetReveal:state.planetRevealTimer,planetRevealReady:state.planetRevealReady,spaceThemeActive:!spaceTheme.paused,spaceThemeTime:spaceTheme.currentTime,hyperspaceThemeActive:!hyperspaceTheme.paused,hyperspaceThemeTime:hyperspaceTheme.currentTime,taftianThemeActive:!taftianCommunicationTheme.paused,taftianThemeTime:taftianCommunicationTheme.currentTime,orbitTheme:activeOrbitThemeIndex+1,orbitThemeActive:!!activeOrbitTheme&&!activeOrbitTheme.paused,autopilotTarget:state.autopilotTarget&&{...state.autopilotTarget},scans:{...state.scans},scanType:state.scanAnimation.type,mineralCargo:JSON.parse(JSON.stringify(state.mineralCargo)),cargoTradeValue:state.cargoTradeValue,credits:state.credits,constructedShips:state.constructedShips.map(ship=>({...ship})),installedModules:[...state.installedModules],upgrades:{...state.upgrades},communicationContact:state.communicationContact,communicationNode:state.communicationNode,landerAngle:state.lander.angle,landerCrew:state.landerCrew,landerStorageUsed:state.landerStorageUsed,landerHold:state.landerHold.map(item=>({...item})),landerShots:state.landerShots.length,landerDestroyed:state.landerDestroyed,energyContacts:state.surfaceNodes.filter(node=>node.type==='energy').map(node=>({storyId:node.storyId,available:isStoryEnergyContactAvailable(node),collected:node.collected})),remainingMinerals:state.surfaceNodes.filter(node=>node.type==='mineral'&&!node.collected).length,remainingLifeforms:state.surfaceNodes.filter(node=>node.type==='biological'&&!node.collected&&!node.defeated).length,biologicalData:state.surfaceNodes.filter(node=>node.type==='biological'&&!node.collected&&node.defeated).length,active:storyActive,intro:introRunning}),
     setPlayer:(x,y)=>{ const ship=activeShip(); ship.x=x; ship.y=y; ship.vx=0; ship.vy=0; },
     enterPlanet:(name)=>{ const body=currentBodies().find(item=>item.name===String(name).toUpperCase()); if(body) enterPlanetSystem(body); },
     openPlanet:(name)=>{ const body=currentBodies().find(item=>item.name===String(name).toUpperCase()); if(body){enterPlanetSystem(body);enterPlanetDetail();} },
