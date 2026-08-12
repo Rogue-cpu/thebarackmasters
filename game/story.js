@@ -314,6 +314,8 @@
   let communicationSpeechTimer = 0;
   let communicationSpeechStartTimer = 0;
   let communicationMouthTimer = 0;
+  let communicationMouthCueTimer = 0;
+  let communicationMouthSuppressed = false;
   let communicationSpeechPaused = false;
   let communicationSpeechElapsed = 0;
   let communicationSpeechEstimate = 1;
@@ -1198,6 +1200,9 @@
   function stopCommunicationMouth(){
     clearInterval(communicationMouthTimer);
     communicationMouthTimer=0;
+    clearTimeout(communicationMouthCueTimer);
+    communicationMouthCueTimer=0;
+    communicationMouthSuppressed=false;
     setCommunicationMouthFrame(0);
   }
 
@@ -1208,9 +1213,43 @@
     let frame=0;
     const pattern=[1,0,2,1,0,1,2,0];
     communicationMouthTimer=setInterval(()=>{
-      if(communicationSpeechPaused) return;
+      if(communicationSpeechPaused||communicationMouthSuppressed){
+        setCommunicationMouthFrame(0);
+        return;
+      }
       setCommunicationMouthFrame(pattern[frame++%pattern.length]);
     },115);
+  }
+
+  function communicationPunctuationCue(text,charIndex,charLength=0,rate=1){
+    const source=String(text||'');
+    const start=Math.max(0,Math.min(source.length,Number(charIndex)||0));
+    let length=Math.max(0,Number(charLength)||0);
+    if(!length){
+      const word=source.slice(start).match(/^[^\s,;:.!?…—-]+/);
+      length=word?word[0].length:0;
+    }
+    const punctuation=(source.slice(start+length).match(/^\s*([,;:.!?…—-])/)||[])[1]||'';
+    if(!punctuation) return null;
+    const pause=/[.!?…]/.test(punctuation)?430:/[;:—-]/.test(punctuation)?285:190;
+    const wordDuration=Math.max(120,Math.min(720,length*58/Math.max(.5,rate||1)));
+    return {delay:wordDuration,pause,punctuation};
+  }
+
+  function cueCommunicationPunctuationPause(text,event,rate){
+    clearTimeout(communicationMouthCueTimer);
+    communicationMouthCueTimer=0;
+    communicationMouthSuppressed=false;
+    const cue=communicationPunctuationCue(text,event.charIndex,event.charLength,rate);
+    if(!cue) return;
+    communicationMouthCueTimer=setTimeout(()=>{
+      communicationMouthSuppressed=true;
+      setCommunicationMouthFrame(0);
+      communicationMouthCueTimer=setTimeout(()=>{
+        communicationMouthSuppressed=false;
+        communicationMouthCueTimer=0;
+      },cue.pause);
+    },cue.delay);
   }
 
   function preferredCommunicationVoice(){
@@ -1275,6 +1314,7 @@
     utterance.onboundary=event=>{
       if(token!==communicationSpeechToken) return;
       communicationSpeechPosition=Math.max(communicationSpeechPosition,communicationSpeechStart+(event.charIndex||0));
+      if(event.name==='word'||!event.name) cueCommunicationPunctuationPause(utterance.text,event,utterance.rate);
       updateCommunicationTimeline();
     };
     utterance.onend=()=>{
@@ -3424,6 +3464,7 @@
     damageLander,
     beginLanderTakeoff,
     advanceTakeoff:updateLanderTakeoff,
+    punctuationCue:communicationPunctuationCue,
     dockStarbase:()=>{const body=currentBodies().find(item=>item.name===STARBASE_SITE.body);if(body){state.planet=body;return enterStarbase();}return false;},
     commissionStarbase:commissionFirstStarbase,
     authorizeStarbase:authorizeFirstStarbase,
