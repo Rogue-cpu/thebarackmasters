@@ -1441,6 +1441,7 @@
     if(shipyardScreen) shipyardScreen.classList.add('hidden');
     if(outfitScreen) outfitScreen.classList.add('hidden');
     if(communicationScreen){communicationScreen.classList.remove('hidden');communicationScreen.setAttribute('aria-hidden','false');}
+    if(communicationScreen) communicationScreen.dataset.faction=contact.faction||'unknown';
     if(communicationLocation) communicationLocation.textContent=contact.location;
     if(communicationName) communicationName.textContent=contact.name;
     if(communicationTitle) communicationTitle.textContent=contact.title;
