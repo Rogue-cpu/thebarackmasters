@@ -66,11 +66,13 @@
   const communicationScreen = document.getElementById('story-communication');
   const communicationLocation = document.getElementById('communication-location');
   const communicationPortrait = document.getElementById('communication-portrait');
+  const communicationMouth = document.getElementById('communication-mouth');
+  const communicationBlink = document.getElementById('communication-blink');
   const communicationName = document.getElementById('communication-name');
   const communicationTitle = document.getElementById('communication-title');
   const communicationText = document.getElementById('communication-text');
   const communicationChoices = document.getElementById('communication-choices');
-  const communicationExit = document.getElementById('communication-exit');
+  const communicationContext = document.getElementById('communication-context');
   const communicationRewind = document.getElementById('communication-rewind');
   const communicationPlay = document.getElementById('communication-play');
   const communicationProgress = document.getElementById('communication-progress');
@@ -142,6 +144,10 @@
         'assets/story/commander-walter-landscape-mouth-mid.png',
         'assets/story/commander-walter-landscape-mouth-open.png'
       ],
+      blinks:[
+        'assets/story/commander-walter-landscape-blink-half.png',
+        'assets/story/commander-walter-landscape-blink-closed.png'
+      ],
       voice:{rate:.92,pitch:.82,volume:1},
       alt:'Taftian Mission Director aboard Source Mission Control',
       greeting:'welcome',
@@ -153,15 +159,19 @@
               ? 'Vanguard I, this is the Mission Director. Source is monitoring the Pioneer investigation, but you are the only vessel close enough to follow its trail. Search the assigned worlds carefully and use your energy scanner to identify deliberate signals, structures, or wreckage. Every recovered clue must be returned here for authenticated analysis before Mission Control can authorize the next stage of the search.'
               : 'Vanguard I, the truth recovered from Pioneer One has changed everything. The expedition is no longer a fading search operation maintained by a handful of loyal personnel. Federation departments are reopening their budgets, new factions are requesting seats in Mission Control, and the first permanent deep-space infrastructure is being planned. We have momentum now, but we must turn it into a program capable of surviving what comes next.'),
           choices:()=>state.campaign.story.pendingSourceAnalysis
-            ? [{label:'Transfer the recovered evidence for analysis.',effect:analyzePendingSourceClue,next:'briefing'},{label:'Review my current orders.',next:'briefing'}]
-            : [{label:'Review my current orders.',next:'briefing'}]
+            ? [{label:'Transfer the recovered evidence for analysis.',effect:analyzePendingSourceClue,next:'briefing'},{label:'Review my current orders.',next:'briefing'},{label:'That is all. Goodbye, Director.',next:'farewell'}]
+            : [{label:'Review my current orders.',next:'briefing'},{label:'That is all. Goodbye, Director.',next:'farewell'}]
         },
         briefing:{
           text:()=>{
             const objective=currentOpeningObjective();
             return `Your current directive is as follows: ${objective.text} Pioneer One's route is being reconstructed one verified segment at a time. Complete only the assigned search, preserve anything you discover, and return all significant evidence to Source. Mission Control will analyze the material and issue your next destination once the result has been authenticated.`;
           },
-          choices:[{label:'Understood.',action:'close'},{label:'Return to the leadership channel.',next:'welcome'}]
+          choices:[{label:'Understood. Return to the leadership channel.',next:'welcome'},{label:'That is all. Goodbye, Director.',next:'farewell'}]
+        },
+        farewell:{
+          text:'Good luck, Vanguard I. Source will be listening for your report. Trust your instruments, protect your crew, and remember that every answer you recover brings Pioneer One—and the truth—closer to home. Mission Control wishes you well on your expedition.',
+          choices:[{label:'End transmission.',action:'close'}]
         }
       }
     },
@@ -177,6 +187,10 @@
         'assets/story/commander-walter-landscape-mouth-mid.png',
         'assets/story/commander-walter-landscape-mouth-open.png'
       ],
+      blinks:[
+        'assets/story/commander-walter-landscape-blink-half.png',
+        'assets/story/commander-walter-landscape-blink-closed.png'
+      ],
       voice:{rate:.92,pitch:.82,volume:1},
       alt:'Commander Walter Briggs aboard Taftian Starbase',
       greeting:'welcome',
@@ -188,7 +202,8 @@
           choices:[
             {label:'What are my current orders?',next:'mission'},
             {label:'What services does the starbase provide?',next:'services'},
-            {label:'What do we know about Pioneer One?',next:'pioneer'}
+            {label:'What do we know about Pioneer One?',next:'pioneer'},
+            {label:'That is all for now, Commander.',next:'farewell'}
           ]
         },
         mission:{
@@ -206,6 +221,10 @@
             ? 'Pioneer One was the first Taftian expedition sent from Source into this region. Its telemetry ended without a distress call, and political support for continued searching was fading when Vanguard I launched. Every authentic clue you recover proves the mission followed a real trail. Do not assume the silence was an accident, but do not report conclusions the evidence cannot support.'
             : 'The recovered wreckage confirms Pioneer One reached Chiron and that its disappearance was not the simple mechanical loss many officials expected. Its surviving records now anchor the Federation investigation. That truth is why this starbase exists, why the program is expanding, and why people who once dismissed the expedition are suddenly watching every move you make.',
           choices:[{label:'Review my orders.',next:'mission'},{label:'Return to the main briefing.',next:'welcome'}]
+        },
+        farewell:{
+          text:'Understood, Captain. Taftian Starbase will keep a berth open and the long-range receivers tuned to Vanguard I. Watch your fuel, do not mistake silence for safety, and come back with your crew intact. Good luck on your expedition.',
+          choices:[{label:'End transmission.',action:'close'}]
         }
       }
     }
@@ -316,6 +335,8 @@
   let communicationSpeechLaunchTimer = 0;
   let communicationMouthTimer = 0;
   let communicationMouthCueTimer = 0;
+  let communicationBlinkTimer = 0;
+  let communicationBlinkStepTimer = 0;
   let communicationMouthSuppressed = false;
   let communicationSpeechPaused = false;
   let communicationSpeechElapsed = 0;
@@ -539,6 +560,7 @@
     communicationContact:null,
     communicationNode:null,
     communicationReturn:null,
+    communicationLastChoice:'',
     pickupNotices:[]
   };
 
@@ -1208,8 +1230,33 @@
   function setCommunicationMouthFrame(index=0){
     const contact=COMMUNICATION_CONTACTS[state.communicationContact];
     const frames=contact&&contact.portraits;
-    if(!communicationPortrait||!frames||!frames.length) return;
-    communicationPortrait.src=frames[Math.max(0,Math.min(frames.length-1,index))];
+    if(!communicationMouth||!frames||frames.length<2) return;
+    if(index<=0){communicationMouth.style.opacity='0';return;}
+    communicationMouth.src=frames[Math.max(1,Math.min(frames.length-1,index))];
+    communicationMouth.style.opacity='1';
+  }
+
+  function stopCommunicationBlink(){
+    clearTimeout(communicationBlinkTimer);communicationBlinkTimer=0;
+    clearTimeout(communicationBlinkStepTimer);communicationBlinkStepTimer=0;
+    if(communicationBlink) communicationBlink.style.opacity='0';
+  }
+
+  function scheduleCommunicationBlink(){
+    stopCommunicationBlink();
+    const contact=COMMUNICATION_CONTACTS[state.communicationContact];
+    if(!communicationBlink||!contact||!contact.blinks||contact.blinks.length<2) return;
+    communicationBlinkTimer=setTimeout(()=>{
+      const [half,closed]=contact.blinks;
+      communicationBlink.src=half;communicationBlink.style.opacity='1';
+      communicationBlinkStepTimer=setTimeout(()=>{
+        communicationBlink.src=closed;
+        communicationBlinkStepTimer=setTimeout(()=>{
+          communicationBlink.src=half;
+          communicationBlinkStepTimer=setTimeout(()=>{communicationBlink.style.opacity='0';scheduleCommunicationBlink();},65);
+        },75);
+      },60);
+    },2600+Math.random()*3300);
   }
 
   function stopCommunicationMouth(){
@@ -1415,6 +1462,7 @@
     const resolvedId=contact.nodes[nodeId]?nodeId:contact.greeting;
     const node=contact.nodes[resolvedId];
     state.communicationNode=resolvedId;
+    if(communicationContext) communicationContext.textContent=state.communicationLastChoice||'';
     const spokenText=communicationValue(node.text);
     if(communicationText) communicationText.textContent=spokenText;
     const choices=communicationValue(node.choices)||[];
@@ -1438,6 +1486,7 @@
     const choices=node?communicationValue(node.choices)||[]:[];
     const choice=choices[index];
     if(!choice) return false;
+    state.communicationLastChoice=String(communicationValue(choice.label)||'');
     if(typeof choice.effect==='function') choice.effect();
     if(choice.action==='close') closeCommunication();
     else renderCommunicationNode(choice.next||contact.greeting);
@@ -1452,6 +1501,7 @@
     if(!sourceAccess&&!starbaseAccess) return false;
     state.mode='communication';clearKeys();
     state.communicationContact=contactId;
+    state.communicationLastChoice='';
     state.communicationReturn=sourceAccess?'source':'starbase';
     if(contact.faction==='taftian') playTaftianCommunicationTheme(true);
     screen.classList.add('starbase-cinematic-active');
@@ -1464,7 +1514,10 @@
     if(communicationName) communicationName.textContent=contact.name;
     if(communicationTitle) communicationTitle.textContent=contact.title;
     if(communicationPortrait){communicationPortrait.src=contact.portrait;communicationPortrait.alt=contact.alt;}
-    (contact.portraits||[]).forEach(source=>{const frame=new Image();frame.src=source;});
+    [...(contact.portraits||[]),...(contact.blinks||[])].forEach(source=>{const frame=new Image();frame.src=source;});
+    if(communicationMouth){communicationMouth.src=contact.portrait;communicationMouth.style.opacity='0';}
+    if(communicationBlink){communicationBlink.src=contact.portrait;communicationBlink.style.opacity='0';}
+    scheduleCommunicationBlink();
     renderCommunicationNode(nodeId||contact.greeting);
     if(controlsLabel) controlsLabel.textContent='SELECT A RESPONSE — ESC TO END TRANSMISSION';
     updateUi();
@@ -1474,9 +1527,11 @@
   function closeCommunication(){
     if(state.mode!=='communication') return false;
     stopCommunicationSpeech(true);
+    stopCommunicationBlink();
     if(communicationScreen){communicationScreen.classList.add('hidden');communicationScreen.setAttribute('aria-hidden','true');}
     state.communicationContact=null;
     state.communicationNode=null;
+    state.communicationLastChoice='';
     const destination=state.communicationReturn;
     state.communicationReturn=null;
     if(destination==='source'){
@@ -3481,7 +3536,6 @@
   if(outfitInstall) outfitInstall.addEventListener('click',installSelectedModule);
   if(outfitRefuel) outfitRefuel.addEventListener('click',buyFuel);
   if(outfitReturn) outfitReturn.addEventListener('click',returnToStarbase);
-  if(communicationExit) communicationExit.addEventListener('click',closeCommunication);
   if(communicationRewind) communicationRewind.addEventListener('click',()=>seekCommunicationSpeech(-1));
   if(communicationForward) communicationForward.addEventListener('click',()=>seekCommunicationSpeech(1));
   if(communicationPlay) communicationPlay.addEventListener('click',toggleCommunicationSpeech);

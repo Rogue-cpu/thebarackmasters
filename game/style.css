@@ -674,7 +674,7 @@ display:flex;justify-content:center;border:1px solid rgba(255,255,255,0.05);box-
 .starbase-cinematic-menu button:first-child { color: #f4ff45; text-shadow: 1px 1px 0 #344000; }
 .starbase-cinematic-menu button:hover,.starbase-cinematic-menu button:focus { transform: translateX(5px); background: linear-gradient(#fff,#a6bbc3 46%,#748087 52%,#dbe2e5); color: #000; }
 .starbase-cinematic-menu button:disabled { opacity:.55; filter:grayscale(.8); transform:none; cursor:not-allowed; color:#354047; }
-.story-communication { --dialogue-font:'Orbitron',sans-serif; --dialogue-color:#f8fdff; --dialogue-glow:rgba(77,236,255,.8); position:absolute; inset:0; z-index:12; display:grid; grid-template-rows:38px minmax(0,1fr) minmax(145px,23%); overflow:hidden; background:#02040b; color:#eaf8ff; font-family:'Orbitron',sans-serif; }
+.story-communication { --dialogue-font:'Orbitron',sans-serif; --dialogue-color:#f8fdff; --dialogue-glow:rgba(77,236,255,.8); position:absolute; inset:0; z-index:12; display:grid; grid-template-rows:38px minmax(0,1fr) minmax(180px,27%); overflow:hidden; background:#02040b; color:#eaf8ff; font-family:'Orbitron',sans-serif; }
 .story-communication[data-faction="taftian"] { --dialogue-font:'Aldrich','Orbitron',sans-serif; --dialogue-color:#f4fbff; --dialogue-glow:rgba(83,231,255,.78); }
 .story-communication[data-faction="servo"] { --dialogue-font:'Orbitron',monospace; --dialogue-color:#63ff87; --dialogue-glow:rgba(65,255,116,.82); }
 .story-communication[data-faction="lunarian"] { --dialogue-font:'Space Grotesk',sans-serif; --dialogue-color:#edcaff; --dialogue-glow:rgba(200,102,255,.86); }
@@ -683,27 +683,34 @@ display:flex;justify-content:center;border:1px solid rgba(255,255,255,0.05);box-
 .communication-header { display:grid; grid-template-columns:1fr 1fr; align-items:center; padding:0 22px; border-bottom:4px ridge #71787d; background:#1219bd; color:#ff29dc; font-size:18px; font-weight:900; letter-spacing:.08em; text-align:center; }
 .communication-header small { color:#80f8ff; font-size:11px; }
 .communication-stage { position:relative; min-height:0; overflow:hidden; background:radial-gradient(ellipse at 50% 35%,rgba(10,113,139,.3),transparent 43%),linear-gradient(135deg,#071323,#02050c 63%); }
-.communication-grid { position:absolute; inset:0; opacity:.34; background:linear-gradient(32deg,transparent 45%,#124963 46% 47%,transparent 48%),linear-gradient(-32deg,transparent 45%,#153d5b 46% 47%,transparent 48%),linear-gradient(90deg,transparent 49%,rgba(255,39,55,.28) 50%,transparent 51%); background-size:150px 105px,150px 105px,330px 100%; animation:communicationGridDrift 9s linear infinite; }
-.communication-stage::before { content:''; position:absolute; inset:0; z-index:3; pointer-events:none; background:linear-gradient(90deg,rgba(255,20,35,.28),transparent 24% 76%,rgba(26,211,255,.18)),repeating-linear-gradient(0deg,rgba(255,255,255,.035) 0 1px,transparent 1px 4px); mix-blend-mode:screen; }
-.communication-portrait { position:absolute; z-index:1; left:50%; top:50%; width:100%; height:100%; object-fit:cover; object-position:center center; transform:translate(-50%,-50%); filter:saturate(.94) contrast(1.06) brightness(.9); animation:communicationPortraitIdle 3.2s ease-in-out infinite; image-rendering:auto; }
-.communication-scan { position:absolute; z-index:4; left:18%; right:18%; height:7%; top:-10%; pointer-events:none; background:linear-gradient(transparent,rgba(173,255,255,.32),rgba(255,255,255,.72),rgba(173,255,255,.25),transparent); filter:blur(1px); mix-blend-mode:screen; animation:communicationScan 4.8s linear infinite; }
+.communication-grid { position:absolute; inset:0; opacity:.1; background:repeating-linear-gradient(0deg,rgba(118,224,255,.08) 0 1px,transparent 1px 4px); }
+.communication-stage::before { content:''; position:absolute; inset:0; z-index:3; pointer-events:none; background:linear-gradient(90deg,rgba(255,20,35,.1),transparent 26% 78%,rgba(26,211,255,.08)); mix-blend-mode:screen; }
+.communication-portrait { position:absolute; z-index:1; left:50%; top:50%; width:100%; height:100%; object-fit:cover; object-position:center center; transform:translate(-50%,-50%); filter:saturate(.96) contrast(1.04) brightness(.92); image-rendering:auto; }
+.communication-face-layer { position:absolute; z-index:2; left:50%; top:50%; width:100%; height:100%; object-fit:cover; object-position:center center; transform:translate(-50%,-50%); opacity:0; pointer-events:none; image-rendering:auto; }
+.communication-mouth-layer { clip-path:inset(39% 62% 43% 27%); }
+.communication-blink-layer { clip-path:inset(20% 62% 66% 26%); }
+.communication-ambient-lights { position:absolute; inset:0; z-index:3; pointer-events:none; opacity:.3; background:radial-gradient(circle at 7% 78%,rgba(30,218,255,.55) 0 2px,transparent 8px),radial-gradient(circle at 83% 83%,rgba(26,162,255,.5) 0 2px,transparent 9px),radial-gradient(circle at 91% 86%,rgba(25,224,255,.35) 0 1px,transparent 7px); animation:communicationLights 5.8s steps(2,end) infinite; }
+.communication-scan { display:none; }
 .communication-text { position:absolute; z-index:6; top:8%; left:55%; right:3%; max-height:68%; overflow:auto; padding:18px 20px; border:0; background:linear-gradient(90deg,rgba(0,0,0,.68),rgba(0,0,0,.34) 82%,rgba(0,0,0,.04)); color:var(--dialogue-color); font:clamp(16px,1.65vw,24px)/1.34 var(--dialogue-font); letter-spacing:.02em; text-align:center; text-wrap:balance; text-shadow:0 2px 2px #000,0 0 9px var(--dialogue-glow); }
 .communication-text::before { content:'TRANSMISSION'; display:block; margin-bottom:10px; color:#53f4ff; font:8px Orbitron,sans-serif; letter-spacing:.22em; }
 .communication-ident { position:absolute; z-index:7; left:22px; bottom:16px; display:grid; gap:5px; padding:10px 15px; border-left:3px solid #42f0ff; background:rgba(1,8,17,.78); text-shadow:0 0 9px #1ac8e3; }
 .communication-ident strong { color:#7fffff; font-size:15px; }.communication-ident span { color:#ff5be6; font-size:9px; letter-spacing:.15em; }
-.communication-console { position:relative; display:grid; grid-template-columns:minmax(0,1fr) 170px; grid-template-rows:minmax(48px,1fr) 44px; gap:10px 12px; min-height:0; padding:13px 15px; border-top:5px ridge #6d747a; background:linear-gradient(#171b21,#070a0e); }
-.communication-transport { grid-column:1/-1; grid-row:2; display:grid; grid-template-columns:50px 76px minmax(220px,1fr) 50px 82px; align-items:center; gap:9px; width:100%; padding:8px 10px; border:2px solid #234f70; background:#07131f; }
+.communication-console { position:relative; display:grid; grid-template-rows:38px auto minmax(78px,1fr); gap:0; min-height:0; padding:0; border-top:5px ridge #6d747a; background:#1014b4; }
+.communication-transport { grid-row:1; display:grid; grid-template-columns:50px 76px minmax(220px,1fr) 50px 82px; align-items:center; gap:9px; width:100%; padding:5px 14px; border:0; border-bottom:2px solid #56636d; background:linear-gradient(#434b51,#242b30); }
 .communication-transport button { min-width:0; padding:6px 4px; border:1px solid #2878aa; border-radius:0; background:#0c2942; color:#7ff5ff; font:8px Orbitron,sans-serif; box-shadow:inset 0 0 8px rgba(35,174,255,.22); }
 .communication-transport button:hover,.communication-transport button:focus { background:#164a70; color:#fff; transform:none; }
 .communication-transport input { width:100%; accent-color:#58f1ff; cursor:pointer; }
 .communication-transport span { min-width:68px; color:#8defff; font:8px Orbitron,sans-serif; text-align:right; }
-.communication-choices { grid-column:1; grid-row:1; display:grid; align-content:start; gap:7px; overflow:auto; }
-.communication-choices button,.communication-exit { border:2px solid #2838ff; border-radius:0; background:#1018b8; color:#75ffff; font:11px/1.3 Orbitron,sans-serif; text-align:left; padding:9px 12px; box-shadow:inset 0 0 12px rgba(45,109,255,.45); }
+.communication-context { grid-row:2; min-height:30px; padding:8px 7%; color:#b7a9ff; font:11px/1.25 var(--dialogue-font); text-align:center; background:#1014b4; }
+.communication-context:empty { display:none; }
+.communication-context::before { content:'(In response to your statement)'; display:block; margin-bottom:4px; color:#9d8cff; font-size:9px; }
+.communication-choices { grid-row:3; display:grid; align-content:start; gap:7px; overflow:auto; padding:8px 7% 12px; background:#1014b4; }
+.communication-choices button { border:0; border-radius:0; background:transparent; color:#d7ceff; font:12px/1.35 var(--dialogue-font); text-align:center; padding:7px 12px; box-shadow:none; }
 .communication-choices button::before { content:'› '; color:#ff48dc; }.communication-choices button:hover,.communication-choices button:focus { border-color:#7dfbff; background:#303cff; color:#fff; transform:translateX(4px); }
-.communication-exit { grid-column:2; grid-row:1; align-self:end; text-align:center; color:#dfeeff; background:#102943; border-color:#3c799f; }
 @keyframes communicationGridDrift { to{background-position:150px 105px,-150px 105px,330px 0} }
 @keyframes communicationPortraitIdle { 0%,100%{transform:translate(-50%,-50%) scale(1);filter:saturate(.94) contrast(1.06) brightness(.9)} 50%{transform:translate(-50%,-50%) scale(1.008);filter:saturate(1.02) contrast(1.1) brightness(.95)} }
 @keyframes communicationScan { to{top:105%} }
+@keyframes communicationLights { 0%,100%{opacity:.18} 35%{opacity:.42} 70%{opacity:.27} }
 .shipyard-screen,.outfit-screen { position:absolute; inset:0; z-index:8; display:grid; grid-template-columns:minmax(0,1fr) 300px; grid-template-rows:38px minmax(0,1fr); color:#7ff7ff; background:#11171d; font-family:'Orbitron',sans-serif; }
 .shipyard-screen.hidden,.outfit-screen.hidden { display:none; }
 .shipyard-header,.outfit-header { grid-column:1/-1; display:grid; grid-template-columns:1fr 300px; align-items:center; background:#1219bd; border-bottom:4px ridge #71787d; color:#ff16d8; font-size:24px; font-weight:900; letter-spacing:.08em; text-align:center; }
@@ -772,7 +779,7 @@ display:flex;justify-content:center;border:1px solid rgba(255,255,255,0.05);box-
 @keyframes outfitSlotTarget { 0%,49%{outline:2px solid rgba(255,240,78,.95);outline-offset:2px} 50%,100%{outline:2px solid rgba(255,240,78,.18);outline-offset:5px} }
 @keyframes outfitInstallFlash { 0%{transform:scale(1);filter:brightness(1)} 28%{transform:scale(1.18);filter:brightness(3);box-shadow:0 0 34px #fff,0 0 55px #31f5ff} 100%{transform:scale(1);filter:brightness(1)} }
 .outfit-stats { position:absolute; left:8%; right:8%; bottom:8%; display:grid; grid-template-columns:1fr 1fr; gap:10px 28px; color:#38a8d0; font-size:13px; }.outfit-stats span { display:flex; justify-content:space-between; }.outfit-stats strong { color:#8deeff; }
-@media(max-width:900px){.shipyard-screen,.outfit-screen{grid-template-columns:minmax(0,1fr) 240px}.shipyard-header,.outfit-header{grid-template-columns:1fr 240px}.shipyard-drydock,.shipyard-bays,.outfit-workbench{right:258px}.shipyard-bays{grid-template-columns:repeat(4,1fr)}.shipyard-catalog,.outfit-catalog{grid-column:2}.starbase-cinematic-menu{width:260px}.communication-console{grid-template-columns:1fr 1.25fr}.communication-exit{grid-column:1/-1}.communication-text{left:53%;right:2%;font-size:14px}}
+@media(max-width:900px){.shipyard-screen,.outfit-screen{grid-template-columns:minmax(0,1fr) 240px}.shipyard-header,.outfit-header{grid-template-columns:1fr 240px}.shipyard-drydock,.shipyard-bays,.outfit-workbench{right:258px}.shipyard-bays{grid-template-columns:repeat(4,1fr)}.shipyard-catalog,.outfit-catalog{grid-column:2}.starbase-cinematic-menu{width:260px}.communication-text{left:53%;right:2%;font-size:14px}}
 .story-return-menu { position: relative; margin-top: auto; width: 100%; border-radius: 3px; padding: 9px; font-size: 9px; }
 body.story-active { overflow: hidden; }
 body.story-active #game, body.story-active #ui, body.story-active #event-test-panel { visibility: hidden; }

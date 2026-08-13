@@ -4,7 +4,7 @@
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width,initial-scale=1" />
   <title>The Barack Masters</title>
-  <link rel="stylesheet" href="style.css?v=landscape-commander-3">
+  <link rel="stylesheet" href="style.css?v=stable-communication-2">
 </head>
 <body class="menu-active">
   <div id="subfaction-modal" class="overlay hidden">
@@ -57,6 +57,9 @@
         <div class="communication-stage">
           <div class="communication-grid"></div>
           <img id="communication-portrait" class="communication-portrait" src="assets/story/commander-walter-landscape-closed.png" alt="Commander Walter Briggs aboard Taftian Starbase">
+          <img id="communication-mouth" class="communication-face-layer communication-mouth-layer" src="assets/story/commander-walter-landscape-closed.png" alt="" aria-hidden="true">
+          <img id="communication-blink" class="communication-face-layer communication-blink-layer" src="assets/story/commander-walter-landscape-closed.png" alt="" aria-hidden="true">
+          <div class="communication-ambient-lights" aria-hidden="true"></div>
           <div class="communication-scan"></div>
           <div id="communication-text" class="communication-text" aria-live="polite"></div>
           <div class="communication-ident">
@@ -72,8 +75,8 @@
               <button id="communication-forward" type="button" title="Fast-forward dialogue (Right Arrow)">▶▶</button>
               <span id="communication-time">0:00 / 0:00</span>
           </div>
+          <div id="communication-context" class="communication-context" aria-live="polite"></div>
           <nav id="communication-choices" class="communication-choices" aria-label="Dialogue responses"></nav>
-          <button id="communication-exit" class="communication-exit" type="button">END TRANSMISSION</button>
         </div>
       </section>
       <section id="shipyard-screen" class="shipyard-screen hidden" aria-label="Starbase shipyard">
@@ -483,7 +486,7 @@
     </div>
   </div>
   <script src="main.js"></script>
-  <script src="story.js?v=landscape-commander-1"></script>
+  <script src="story.js?v=stable-communication-2"></script>
   <script src="mainMenuMusic.js"></script>
 </body>
 </html>
