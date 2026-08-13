@@ -136,11 +136,11 @@
       name:'MISSION DIRECTOR',
       title:'TAFTIAN PIONEER EXPEDITION',
       location:'SOURCE — TAFTIAN MISSION CONTROL',
-      portrait:'assets/story/commander-walter-closed.png',
+      portrait:'assets/story/commander-walter-landscape-closed.png',
       portraits:[
-        'assets/story/commander-walter-closed.png',
-        'assets/story/commander-walter-mouth-mid.png',
-        'assets/story/commander-walter-mouth-open.png'
+        'assets/story/commander-walter-landscape-closed.png',
+        'assets/story/commander-walter-landscape-mouth-mid.png',
+        'assets/story/commander-walter-landscape-mouth-open.png'
       ],
       voice:{rate:.92,pitch:.82,volume:1},
       alt:'Taftian Mission Director aboard Source Mission Control',
@@ -171,11 +171,11 @@
       name:'COMMANDER WALTER BRIGGS',
       title:'TAFTIAN STARBASE COMMANDER',
       location:'TAFTIAN DEEP-SPACE STARBASE',
-      portrait:'assets/story/commander-walter-closed.png',
+      portrait:'assets/story/commander-walter-landscape-closed.png',
       portraits:[
-        'assets/story/commander-walter-closed.png',
-        'assets/story/commander-walter-mouth-mid.png',
-        'assets/story/commander-walter-mouth-open.png'
+        'assets/story/commander-walter-landscape-closed.png',
+        'assets/story/commander-walter-landscape-mouth-mid.png',
+        'assets/story/commander-walter-landscape-mouth-open.png'
       ],
       voice:{rate:.92,pitch:.82,volume:1},
       alt:'Commander Walter Briggs aboard Taftian Starbase',
@@ -313,6 +313,7 @@
   let communicationSpeechToken = 0;
   let communicationSpeechTimer = 0;
   let communicationSpeechStartTimer = 0;
+  let communicationSpeechLaunchTimer = 0;
   let communicationMouthTimer = 0;
   let communicationMouthCueTimer = 0;
   let communicationMouthSuppressed = false;
@@ -1277,6 +1278,7 @@
     communicationSpeechToken+=1;
     clearInterval(communicationSpeechTimer);communicationSpeechTimer=0;
     clearTimeout(communicationSpeechStartTimer);communicationSpeechStartTimer=0;
+    clearTimeout(communicationSpeechLaunchTimer);communicationSpeechLaunchTimer=0;
     stopCommunicationMouth();
     communicationUtterance=null;
     communicationSpeechPaused=false;
@@ -1335,6 +1337,17 @@
       if(token!==communicationSpeechToken) return;
       clearTimeout(communicationSpeechStartTimer);communicationSpeechStartTimer=0;
       clearInterval(communicationSpeechTimer);communicationSpeechTimer=0;
+      const completedEnough=communicationSpeechElapsed>=communicationSpeechEstimate*.48||communicationSpeechPosition>=fullText.length*.9;
+      if(!completedEnough){
+        communicationSpeechToken+=1;
+        communicationUtterance=null;
+        communicationSpeechPaused=false;
+        communicationSpeechPosition=communicationSpeechStart;
+        stopCommunicationMouth();
+        if(communicationPlay) communicationPlay.textContent='PLAY';
+        updateCommunicationTimeline();
+        return;
+      }
       communicationSpeechPosition=fullText.length;
       communicationUtterance=null;
       stopCommunicationMouth();
@@ -1348,19 +1361,24 @@
       communicationUtterance=null;stopCommunicationMouth();
       if(communicationPlay) communicationPlay.textContent='PLAY';
     };
-    window.speechSynthesis.resume();
-    window.speechSynthesis.speak(utterance);
-    communicationSpeechStartTimer=setTimeout(()=>{
-      if(token!==communicationSpeechToken||window.speechSynthesis.speaking) return;
-      communicationSpeechToken+=1;
-      window.speechSynthesis.cancel();
-      communicationUtterance=null;
-      communicationSpeechPaused=false;
-      communicationSpeechPosition=communicationSpeechStart;
-      stopCommunicationMouth();
-      if(communicationPlay) communicationPlay.textContent='PLAY';
-      updateCommunicationTimeline();
-    },2200);
+    // Chrome can discard a new utterance when cancel() and speak() happen in the same task.
+    communicationSpeechLaunchTimer=setTimeout(()=>{
+      if(token!==communicationSpeechToken) return;
+      communicationSpeechLaunchTimer=0;
+      window.speechSynthesis.resume();
+      window.speechSynthesis.speak(utterance);
+      communicationSpeechStartTimer=setTimeout(()=>{
+        if(token!==communicationSpeechToken||window.speechSynthesis.speaking) return;
+        communicationSpeechToken+=1;
+        window.speechSynthesis.cancel();
+        communicationUtterance=null;
+        communicationSpeechPaused=false;
+        communicationSpeechPosition=communicationSpeechStart;
+        stopCommunicationMouth();
+        if(communicationPlay) communicationPlay.textContent='PLAY';
+        updateCommunicationTimeline();
+      },2200);
+    },120);
     return true;
   }
 
