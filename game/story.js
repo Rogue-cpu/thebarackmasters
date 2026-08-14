@@ -1271,7 +1271,7 @@
   function startCommunicationMouth(){
     stopCommunicationMouth();
     const contact=COMMUNICATION_CONTACTS[state.communicationContact];
-    if(!contact||!contact.portraits||contact.portraits.length<2) return;
+    if(!communicationMouth||!contact||!contact.portraits||contact.portraits.length<2) return;
     let frame=0;
     const pattern=[1,0,2,1,0,1,2,0];
     communicationMouthTimer=setInterval(()=>{
