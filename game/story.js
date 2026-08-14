@@ -138,9 +138,9 @@
       location:'SOURCE — TAFTIAN MISSION CONTROL',
       portrait:'assets/story/commander-walter-landscape-closed.png',
       backgrounds:[
-        'assets/story/commander-walter-background-frame-01.png',
-        'assets/story/commander-walter-background-frame-02.png',
-        'assets/story/commander-walter-background-frame-03.png'
+        'assets/story/commander-walter-visible-twinkle-frame-01.png',
+        'assets/story/commander-walter-visible-twinkle-frame-02.png',
+        'assets/story/commander-walter-visible-twinkle-frame-03.png'
       ],
       portraits:[
         'assets/story/commander-walter-landscape-closed.png',
@@ -186,9 +186,9 @@
       location:'TAFTIAN DEEP-SPACE STARBASE',
       portrait:'assets/story/commander-walter-landscape-closed.png',
       backgrounds:[
-        'assets/story/commander-walter-background-frame-01.png',
-        'assets/story/commander-walter-background-frame-02.png',
-        'assets/story/commander-walter-background-frame-03.png'
+        'assets/story/commander-walter-visible-twinkle-frame-01.png',
+        'assets/story/commander-walter-visible-twinkle-frame-02.png',
+        'assets/story/commander-walter-visible-twinkle-frame-03.png'
       ],
       portraits:[
         'assets/story/commander-walter-landscape-closed.png',
@@ -320,11 +320,12 @@
       const mask=document.createElement('canvas');mask.width=width;mask.height=height;
       const maskContext=mask.getContext('2d');
       const twinklePatches=[
-        [.136,.199,.018],
-        [.698,.212,.016],
-        [.729,.212,.016],
-        [.795,.128,.019],
-        [.869,.160,.019]
+        [.025,.418,.017],
+        [.059,.456,.019],
+        [.206,.214,.020],
+        [.215,.259,.023],
+        [.227,.283,.022],
+        [.221,.370,.025]
       ];
       twinklePatches.forEach(([x,y,r])=>{
         const radius=width*r;
