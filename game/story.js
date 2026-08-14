@@ -228,6 +228,7 @@
     }
   };
   const communicationFrameCache = new Map();
+  const communicationCompositeCache = new Map();
   function preloadCommunicationFrame(source){
     if(!source||communicationFrameCache.has(source)) return communicationFrameCache.get(source);
     const frame=new Image();
@@ -237,13 +238,57 @@
     return frame;
   }
   function setCommunicationPortraitSource(source){
-    const cached=preloadCommunicationFrame(source);
-    if(!communicationPortrait||!cached||!cached.complete||!cached.naturalWidth) return false;
-    communicationPortrait.src=source;
-    return true;
+    if(!communicationPortrait) return false;
+    const composite=communicationCompositeCache.get(source);
+    if(typeof composite==='string'){
+      communicationPortrait.src=composite;
+      return true;
+    }
+    const contact=COMMUNICATION_CONTACTS[state.communicationContact];
+    if(contact&&source===contact.portrait){communicationPortrait.src=source;return true;}
+    return false;
+  }
+  function communicationImageReady(image){
+    if(image.complete&&image.naturalWidth) return Promise.resolve(image);
+    return new Promise(resolve=>{
+      image.addEventListener('load',()=>resolve(image),{once:true});
+      image.addEventListener('error',()=>resolve(null),{once:true});
+    });
+  }
+  function buildCommunicationComposite(baseSource,variantSource,kind){
+    if(!variantSource||communicationCompositeCache.has(variantSource)) return;
+    if(variantSource===baseSource){communicationCompositeCache.set(variantSource,variantSource);return;}
+    communicationCompositeCache.set(variantSource,null);
+    const base=preloadCommunicationFrame(baseSource);
+    const variant=preloadCommunicationFrame(variantSource);
+    Promise.all([communicationImageReady(base),communicationImageReady(variant)]).then(([readyBase,readyVariant])=>{
+      if(!readyBase||!readyVariant) return;
+      const width=readyBase.naturalWidth,height=readyBase.naturalHeight;
+      const output=document.createElement('canvas');output.width=width;output.height=height;
+      const outputContext=output.getContext('2d');outputContext.drawImage(readyBase,0,0,width,height);
+      const patch=document.createElement('canvas');patch.width=width;patch.height=height;
+      const patchContext=patch.getContext('2d');patchContext.drawImage(readyVariant,0,0,width,height);
+      patchContext.globalCompositeOperation='destination-in';
+      const isBlink=kind==='blink';
+      const centerX=width*.31,centerY=height*(isBlink?.305:.414);
+      const radiusX=width*(isBlink?.047:.038),radiusY=height*(isBlink?.035:.043);
+      patchContext.save();patchContext.translate(centerX,centerY);patchContext.scale(1,radiusY/radiusX);
+      const mask=patchContext.createRadialGradient(0,0,radiusX*.42,0,0,radiusX);
+      mask.addColorStop(0,'rgba(0,0,0,1)');mask.addColorStop(.62,'rgba(0,0,0,.96)');mask.addColorStop(.82,'rgba(0,0,0,.38)');mask.addColorStop(1,'rgba(0,0,0,0)');
+      patchContext.fillStyle=mask;patchContext.beginPath();patchContext.arc(0,0,radiusX,0,TWO_PI);patchContext.fill();patchContext.restore();
+      outputContext.drawImage(patch,0,0);
+      communicationCompositeCache.set(variantSource,output.toDataURL('image/png'));
+    }).catch(()=>{});
+  }
+  function prepareCommunicationContactFrames(contact){
+    if(!contact) return;
+    communicationCompositeCache.set(contact.portrait,contact.portrait);
+    (contact.portraits||[]).forEach(source=>buildCommunicationComposite(contact.portrait,source,'mouth'));
+    (contact.blinks||[]).forEach(source=>buildCommunicationComposite(contact.portrait,source,'blink'));
   }
   Object.values(COMMUNICATION_CONTACTS).forEach(contact=>{
     [contact.portrait,...(contact.portraits||[]),...(contact.blinks||[])].forEach(preloadCommunicationFrame);
+    prepareCommunicationContactFrames(contact);
   });
   const MINERAL_CATEGORIES = [
     {name:'Common',value:1,weight:30,color:'#8fd8ff',materials:['Hydrogen','Helium','Carbon','Nitrogen','Silicon','Phosphorus','Selenium','Methane','Ammonia','Water']},
@@ -1532,6 +1577,7 @@
     if(communicationTitle) communicationTitle.textContent=contact.title;
     if(communicationPortrait){communicationPortrait.src=contact.portrait;communicationPortrait.alt=contact.alt;}
     [...(contact.portraits||[]),...(contact.blinks||[])].forEach(preloadCommunicationFrame);
+    prepareCommunicationContactFrames(contact);
     scheduleCommunicationBlink();
     renderCommunicationNode(nodeId||contact.greeting);
     if(controlsLabel) controlsLabel.textContent='SELECT A RESPONSE — ESC TO END TRANSMISSION';
@@ -3592,6 +3638,7 @@
     beginLanderTakeoff,
     advanceTakeoff:updateLanderTakeoff,
     punctuationCue:communicationPunctuationCue,
+    setCommunicationMouthFrame,
     dockStarbase:()=>{const body=currentBodies().find(item=>item.name===STARBASE_SITE.body);if(body){state.planet=body;return enterStarbase();}return false;},
     commissionStarbase:commissionFirstStarbase,
     authorizeStarbase:authorizeFirstStarbase,
