@@ -66,6 +66,7 @@
   const communicationScreen = document.getElementById('story-communication');
   const communicationLocation = document.getElementById('communication-location');
   const communicationPortrait = document.getElementById('communication-portrait');
+  const communicationBackgroundEffect = document.getElementById('communication-background-effect');
   const communicationName = document.getElementById('communication-name');
   const communicationTitle = document.getElementById('communication-title');
   const communicationText = document.getElementById('communication-text');
@@ -241,8 +242,8 @@
   const communicationBackgroundCache = new Map();
   const communicationCompositeCache = new Map();
   let communicationBackgroundTimer = 0;
+  let communicationBackgroundFadeTimer = 0;
   let communicationBackgroundIndex = 0;
-  let communicationActiveBackground = '';
   let communicationCurrentFace = '';
   function preloadCommunicationFrame(source){
     if(!source||communicationFrameCache.has(source)) return communicationFrameCache.get(source);
@@ -257,15 +258,13 @@
     communicationCurrentFace=source;
     const contact=COMMUNICATION_CONTACTS[state.communicationContact];
     if(!contact) return false;
-    const background=communicationActiveBackground||contact.portrait;
-    const composite=communicationCompositeCache.get(`${background}|${source}`);
+    const composite=communicationCompositeCache.get(`${contact.portrait}|${source}`);
     if(typeof composite==='string'){
       communicationPortrait.src=composite;
       return true;
     }
     if(source===contact.portrait){
-      const preparedBackground=communicationBackgroundCache.get(background);
-      communicationPortrait.src=typeof preparedBackground==='string'?preparedBackground:contact.portrait;
+      communicationPortrait.src=contact.portrait;
       return true;
     }
     return false;
@@ -302,7 +301,7 @@
       patchContext.fillStyle=mask;patchContext.beginPath();patchContext.arc(0,0,radiusX,0,TWO_PI);patchContext.fill();patchContext.restore();
       outputContext.drawImage(patch,0,0);
       communicationCompositeCache.set(cacheKey,output.toDataURL('image/png'));
-      if(baseKey===communicationActiveBackground&&variantSource===communicationCurrentFace) setCommunicationPortraitSource(variantSource);
+      if(baseKey===(COMMUNICATION_CONTACTS[state.communicationContact]||{}).portrait&&variantSource===communicationCurrentFace) setCommunicationPortraitSource(variantSource);
     }).catch(()=>{});
   }
   function prepareCommunicationBackground(contact,backgroundSource){
@@ -313,8 +312,6 @@
     Promise.all([communicationImageReady(master),communicationImageReady(generated)]).then(([readyMaster,readyGenerated])=>{
       if(!readyMaster||!readyGenerated) return;
       const width=readyMaster.naturalWidth,height=readyMaster.naturalHeight;
-      const output=document.createElement('canvas');output.width=width;output.height=height;
-      const context=output.getContext('2d');context.drawImage(readyMaster,0,0,width,height);
       const patch=document.createElement('canvas');patch.width=width;patch.height=height;
       const patchContext=patch.getContext('2d');patchContext.drawImage(readyGenerated,0,0,width,height);
       const mask=document.createElement('canvas');mask.width=width;mask.height=height;
@@ -337,11 +334,7 @@
         maskContext.fillStyle=glow;maskContext.beginPath();maskContext.arc(width*x,height*y,radius,0,TWO_PI);maskContext.fill();
       });
       patchContext.globalCompositeOperation='destination-in';patchContext.drawImage(mask,0,0);
-      context.drawImage(patch,0,0);
-      const prepared=output.toDataURL('image/png');
-      communicationBackgroundCache.set(backgroundSource,prepared);
-      (contact.portraits||[]).forEach(source=>buildCommunicationComposite(backgroundSource,prepared,source,'mouth'));
-      (contact.blinks||[]).forEach(source=>buildCommunicationComposite(backgroundSource,prepared,source,'blink'));
+      communicationBackgroundCache.set(backgroundSource,patch.toDataURL('image/png'));
     }).catch(()=>{});
   }
   function prepareCommunicationContactFrames(contact){
@@ -356,26 +349,36 @@
     prepareCommunicationContactFrames(contact);
   });
   function stopCommunicationBackgroundAnimation(){
-    clearInterval(communicationBackgroundTimer);communicationBackgroundTimer=0;
+    clearTimeout(communicationBackgroundTimer);communicationBackgroundTimer=0;
+    clearTimeout(communicationBackgroundFadeTimer);communicationBackgroundFadeTimer=0;
     communicationBackgroundIndex=0;
-    communicationActiveBackground='';
+    if(communicationBackgroundEffect){communicationBackgroundEffect.style.opacity='0';communicationBackgroundEffect.removeAttribute('src');}
   }
   function startCommunicationBackgroundAnimation(){
     stopCommunicationBackgroundAnimation();
     const contact=COMMUNICATION_CONTACTS[state.communicationContact];
     if(!contact) return;
-    communicationActiveBackground=contact.portrait;
     communicationCurrentFace=contact.portrait;
     setCommunicationPortraitSource(contact.portrait);
     const backgrounds=contact.backgrounds||[];
-    if(!backgrounds.length) return;
-    const sequence=backgrounds;
-    communicationBackgroundTimer=setInterval(()=>{
-      const next=sequence[communicationBackgroundIndex++%sequence.length];
-      if(next!==contact.portrait&&typeof communicationBackgroundCache.get(next)!=='string') return;
-      communicationActiveBackground=next;
-      setCommunicationPortraitSource(communicationCurrentFace||contact.portrait);
-    },1250);
+    if(!backgrounds.length||!communicationBackgroundEffect) return;
+    const showNextEffect=()=>{
+      if(state.mode!=='communication'||COMMUNICATION_CONTACTS[state.communicationContact]!==contact) return;
+      const next=backgrounds[communicationBackgroundIndex++%backgrounds.length];
+      const effectSource=communicationBackgroundCache.get(next);
+      if(typeof effectSource!=='string'){
+        communicationBackgroundTimer=setTimeout(showNextEffect,250);
+        return;
+      }
+      communicationBackgroundEffect.style.opacity='0';
+      communicationBackgroundEffect.src=effectSource;
+      requestAnimationFrame(()=>requestAnimationFrame(()=>{communicationBackgroundEffect.style.opacity='1';}));
+      communicationBackgroundTimer=setTimeout(()=>{
+        communicationBackgroundEffect.style.opacity='0';
+        communicationBackgroundFadeTimer=setTimeout(showNextEffect,800);
+      },1700);
+    };
+    communicationBackgroundTimer=setTimeout(showNextEffect,350);
   }
   const MINERAL_CATEGORIES = [
     {name:'Common',value:1,weight:30,color:'#8fd8ff',materials:['Hydrogen','Helium','Carbon','Nitrogen','Silicon','Phosphorus','Selenium','Methane','Ammonia','Water']},
