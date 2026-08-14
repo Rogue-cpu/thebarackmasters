@@ -137,6 +137,11 @@
       title:'TAFTIAN PIONEER EXPEDITION',
       location:'SOURCE — TAFTIAN MISSION CONTROL',
       portrait:'assets/story/commander-walter-landscape-closed.png',
+      backgrounds:[
+        'assets/story/commander-walter-background-frame-01.png',
+        'assets/story/commander-walter-background-frame-02.png',
+        'assets/story/commander-walter-background-frame-03.png'
+      ],
       portraits:[
         'assets/story/commander-walter-landscape-closed.png',
         'assets/story/commander-walter-landscape-mouth-mid.png',
@@ -180,6 +185,11 @@
       title:'TAFTIAN STARBASE COMMANDER',
       location:'TAFTIAN DEEP-SPACE STARBASE',
       portrait:'assets/story/commander-walter-landscape-closed.png',
+      backgrounds:[
+        'assets/story/commander-walter-background-frame-01.png',
+        'assets/story/commander-walter-background-frame-02.png',
+        'assets/story/commander-walter-background-frame-03.png'
+      ],
       portraits:[
         'assets/story/commander-walter-landscape-closed.png',
         'assets/story/commander-walter-landscape-mouth-mid.png',
@@ -228,7 +238,12 @@
     }
   };
   const communicationFrameCache = new Map();
+  const communicationBackgroundCache = new Map();
   const communicationCompositeCache = new Map();
+  let communicationBackgroundTimer = 0;
+  let communicationBackgroundIndex = 0;
+  let communicationActiveBackground = '';
+  let communicationCurrentFace = '';
   function preloadCommunicationFrame(source){
     if(!source||communicationFrameCache.has(source)) return communicationFrameCache.get(source);
     const frame=new Image();
@@ -239,13 +254,20 @@
   }
   function setCommunicationPortraitSource(source){
     if(!communicationPortrait) return false;
-    const composite=communicationCompositeCache.get(source);
+    communicationCurrentFace=source;
+    const contact=COMMUNICATION_CONTACTS[state.communicationContact];
+    if(!contact) return false;
+    const background=communicationActiveBackground||contact.portrait;
+    const composite=communicationCompositeCache.get(`${background}|${source}`);
     if(typeof composite==='string'){
       communicationPortrait.src=composite;
       return true;
     }
-    const contact=COMMUNICATION_CONTACTS[state.communicationContact];
-    if(contact&&source===contact.portrait){communicationPortrait.src=source;return true;}
+    if(source===contact.portrait){
+      const preparedBackground=communicationBackgroundCache.get(background);
+      communicationPortrait.src=typeof preparedBackground==='string'?preparedBackground:contact.portrait;
+      return true;
+    }
     return false;
   }
   function communicationImageReady(image){
@@ -255,10 +277,12 @@
       image.addEventListener('error',()=>resolve(null),{once:true});
     });
   }
-  function buildCommunicationComposite(baseSource,variantSource,kind){
-    if(!variantSource||communicationCompositeCache.has(variantSource)) return;
-    if(variantSource===baseSource){communicationCompositeCache.set(variantSource,variantSource);return;}
-    communicationCompositeCache.set(variantSource,null);
+  function buildCommunicationComposite(baseKey,baseSource,variantSource,kind){
+    if(!variantSource) return;
+    const cacheKey=`${baseKey}|${variantSource}`;
+    if(communicationCompositeCache.has(cacheKey)) return;
+    if(variantSource===baseKey){communicationCompositeCache.set(cacheKey,baseSource);return;}
+    communicationCompositeCache.set(cacheKey,null);
     const base=preloadCommunicationFrame(baseSource);
     const variant=preloadCommunicationFrame(variantSource);
     Promise.all([communicationImageReady(base),communicationImageReady(variant)]).then(([readyBase,readyVariant])=>{
@@ -277,19 +301,67 @@
       mask.addColorStop(0,'rgba(0,0,0,1)');mask.addColorStop(.62,'rgba(0,0,0,.96)');mask.addColorStop(.82,'rgba(0,0,0,.38)');mask.addColorStop(1,'rgba(0,0,0,0)');
       patchContext.fillStyle=mask;patchContext.beginPath();patchContext.arc(0,0,radiusX,0,TWO_PI);patchContext.fill();patchContext.restore();
       outputContext.drawImage(patch,0,0);
-      communicationCompositeCache.set(variantSource,output.toDataURL('image/png'));
+      communicationCompositeCache.set(cacheKey,output.toDataURL('image/png'));
+      if(baseKey===communicationActiveBackground&&variantSource===communicationCurrentFace) setCommunicationPortraitSource(variantSource);
+    }).catch(()=>{});
+  }
+  function prepareCommunicationBackground(contact,backgroundSource){
+    if(!contact||!backgroundSource||communicationBackgroundCache.has(backgroundSource)) return;
+    communicationBackgroundCache.set(backgroundSource,null);
+    const master=preloadCommunicationFrame(contact.portrait);
+    const generated=preloadCommunicationFrame(backgroundSource);
+    Promise.all([communicationImageReady(master),communicationImageReady(generated)]).then(([readyMaster,readyGenerated])=>{
+      if(!readyMaster||!readyGenerated) return;
+      const width=readyMaster.naturalWidth,height=readyMaster.naturalHeight;
+      const output=document.createElement('canvas');output.width=width;output.height=height;
+      const context=output.getContext('2d');context.drawImage(readyMaster,0,0,width,height);
+      context.save();
+      context.beginPath();
+      context.rect(0,height*.1,width*.245,height*.48);
+      context.moveTo(width*.455,0);context.lineTo(width,0);context.lineTo(width,height*.68);context.lineTo(width*.555,height*.67);context.closePath();
+      context.rect(width*.505,height*.63,width*.495,height*.24);
+      context.clip();
+      context.drawImage(readyGenerated,0,0,width,height);
+      context.restore();
+      const prepared=output.toDataURL('image/png');
+      communicationBackgroundCache.set(backgroundSource,prepared);
+      (contact.portraits||[]).forEach(source=>buildCommunicationComposite(backgroundSource,prepared,source,'mouth'));
+      (contact.blinks||[]).forEach(source=>buildCommunicationComposite(backgroundSource,prepared,source,'blink'));
     }).catch(()=>{});
   }
   function prepareCommunicationContactFrames(contact){
     if(!contact) return;
-    communicationCompositeCache.set(contact.portrait,contact.portrait);
-    (contact.portraits||[]).forEach(source=>buildCommunicationComposite(contact.portrait,source,'mouth'));
-    (contact.blinks||[]).forEach(source=>buildCommunicationComposite(contact.portrait,source,'blink'));
+    communicationBackgroundCache.set(contact.portrait,contact.portrait);
+    (contact.portraits||[]).forEach(source=>buildCommunicationComposite(contact.portrait,contact.portrait,source,'mouth'));
+    (contact.blinks||[]).forEach(source=>buildCommunicationComposite(contact.portrait,contact.portrait,source,'blink'));
+    (contact.backgrounds||[]).forEach(source=>prepareCommunicationBackground(contact,source));
   }
   Object.values(COMMUNICATION_CONTACTS).forEach(contact=>{
-    [contact.portrait,...(contact.portraits||[]),...(contact.blinks||[])].forEach(preloadCommunicationFrame);
+    [contact.portrait,...(contact.backgrounds||[]),...(contact.portraits||[]),...(contact.blinks||[])].forEach(preloadCommunicationFrame);
     prepareCommunicationContactFrames(contact);
   });
+  function stopCommunicationBackgroundAnimation(){
+    clearInterval(communicationBackgroundTimer);communicationBackgroundTimer=0;
+    communicationBackgroundIndex=0;
+    communicationActiveBackground='';
+  }
+  function startCommunicationBackgroundAnimation(){
+    stopCommunicationBackgroundAnimation();
+    const contact=COMMUNICATION_CONTACTS[state.communicationContact];
+    if(!contact) return;
+    communicationActiveBackground=contact.portrait;
+    communicationCurrentFace=contact.portrait;
+    setCommunicationPortraitSource(contact.portrait);
+    const backgrounds=contact.backgrounds||[];
+    if(!backgrounds.length) return;
+    const sequence=backgrounds.flatMap(source=>[contact.portrait,source]);
+    communicationBackgroundTimer=setInterval(()=>{
+      const next=sequence[communicationBackgroundIndex++%sequence.length];
+      if(next!==contact.portrait&&typeof communicationBackgroundCache.get(next)!=='string') return;
+      communicationActiveBackground=next;
+      setCommunicationPortraitSource(communicationCurrentFace||contact.portrait);
+    },900);
+  }
   const MINERAL_CATEGORIES = [
     {name:'Common',value:1,weight:30,color:'#8fd8ff',materials:['Hydrogen','Helium','Carbon','Nitrogen','Silicon','Phosphorus','Selenium','Methane','Ammonia','Water']},
     {name:'Corrosive',value:2,weight:17,color:'#66ff6c',materials:['Oxygen','Fluorine','Sulfur','Chlorine','Bromine','Iodine']},
@@ -809,6 +881,7 @@
   }
 
   function setPlanetOpsVisible(visible){
+    stopCommunicationBackgroundAnimation();
     screen.classList.remove('starbase-cinematic-active');
     if(storyNavMenu) storyNavMenu.classList.toggle('hidden',visible);
     if(planetOpsMenu) planetOpsMenu.classList.toggle('hidden',!visible);
@@ -819,6 +892,7 @@
   }
 
   function setStarbaseMenuVisible(visible){
+    stopCommunicationBackgroundAnimation();
     screen.classList.toggle('starbase-cinematic-active',visible);
     if(storyNavMenu) storyNavMenu.classList.toggle('hidden',visible);
     if(planetOpsMenu) planetOpsMenu.classList.add('hidden');
@@ -1576,8 +1650,9 @@
     if(communicationName) communicationName.textContent=contact.name;
     if(communicationTitle) communicationTitle.textContent=contact.title;
     if(communicationPortrait){communicationPortrait.src=contact.portrait;communicationPortrait.alt=contact.alt;}
-    [...(contact.portraits||[]),...(contact.blinks||[])].forEach(preloadCommunicationFrame);
+    [...(contact.backgrounds||[]),...(contact.portraits||[]),...(contact.blinks||[])].forEach(preloadCommunicationFrame);
     prepareCommunicationContactFrames(contact);
+    startCommunicationBackgroundAnimation();
     scheduleCommunicationBlink();
     renderCommunicationNode(nodeId||contact.greeting);
     if(controlsLabel) controlsLabel.textContent='SELECT A RESPONSE — ESC TO END TRANSMISSION';
@@ -1587,6 +1662,7 @@
 
   function closeCommunication(){
     if(state.mode!=='communication') return false;
+    stopCommunicationBackgroundAnimation();
     stopCommunicationSpeech(true);
     stopCommunicationBlink();
     if(communicationScreen){communicationScreen.classList.add('hidden');communicationScreen.setAttribute('aria-hidden','true');}
