@@ -1280,7 +1280,7 @@
         return;
       }
       setCommunicationMouthFrame(pattern[frame++%pattern.length]);
-    },115);
+    },165);
   }
 
   function communicationPunctuationCue(text,charIndex,charLength=0,rate=1){
