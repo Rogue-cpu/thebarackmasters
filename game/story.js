@@ -3081,10 +3081,10 @@
       });
     }
     if(flagshipSprite.complete&&flagshipSprite.naturalWidth){
-      ctx.shadowColor=color;ctx.shadowBlur=10/scale;
+      ctx.shadowBlur=0;
       ctx.drawImage(flagshipSprite,-width/2,-height/2,width,height);
     }else{
-      ctx.rotate(-FLAGSHIP_SPRITE_ROTATION);ctx.shadowColor=color;ctx.shadowBlur=10/scale;ctx.fillStyle=color;
+      ctx.rotate(-FLAGSHIP_SPRITE_ROTATION);ctx.shadowBlur=0;ctx.fillStyle=color;
       ctx.beginPath();ctx.moveTo(13/scale,0);ctx.lineTo(-9/scale,-7/scale);ctx.lineTo(-5/scale,0);ctx.lineTo(-9/scale,7/scale);ctx.closePath();ctx.fill();
     }
     ctx.restore();
