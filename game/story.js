@@ -66,8 +66,6 @@
   const communicationScreen = document.getElementById('story-communication');
   const communicationLocation = document.getElementById('communication-location');
   const communicationPortrait = document.getElementById('communication-portrait');
-  const communicationMouth = document.getElementById('communication-mouth');
-  const communicationBlink = document.getElementById('communication-blink');
   const communicationName = document.getElementById('communication-name');
   const communicationTitle = document.getElementById('communication-title');
   const communicationText = document.getElementById('communication-text');
@@ -229,6 +227,24 @@
       }
     }
   };
+  const communicationFrameCache = new Map();
+  function preloadCommunicationFrame(source){
+    if(!source||communicationFrameCache.has(source)) return communicationFrameCache.get(source);
+    const frame=new Image();
+    communicationFrameCache.set(source,frame);
+    frame.src=source;
+    if(typeof frame.decode==='function') frame.decode().catch(()=>{});
+    return frame;
+  }
+  function setCommunicationPortraitSource(source){
+    const cached=preloadCommunicationFrame(source);
+    if(!communicationPortrait||!cached||!cached.complete||!cached.naturalWidth) return false;
+    communicationPortrait.src=source;
+    return true;
+  }
+  Object.values(COMMUNICATION_CONTACTS).forEach(contact=>{
+    [contact.portrait,...(contact.portraits||[]),...(contact.blinks||[])].forEach(preloadCommunicationFrame);
+  });
   const MINERAL_CATEGORIES = [
     {name:'Common',value:1,weight:30,color:'#8fd8ff',materials:['Hydrogen','Helium','Carbon','Nitrogen','Silicon','Phosphorus','Selenium','Methane','Ammonia','Water']},
     {name:'Corrosive',value:2,weight:17,color:'#66ff6c',materials:['Oxygen','Fluorine','Sulfur','Chlorine','Bromine','Iodine']},
@@ -337,6 +353,7 @@
   let communicationMouthCueTimer = 0;
   let communicationBlinkTimer = 0;
   let communicationBlinkStepTimer = 0;
+  let communicationBlinkActive = false;
   let communicationMouthSuppressed = false;
   let communicationSpeechPaused = false;
   let communicationSpeechElapsed = 0;
@@ -1230,30 +1247,30 @@
   function setCommunicationMouthFrame(index=0){
     const contact=COMMUNICATION_CONTACTS[state.communicationContact];
     const frames=contact&&contact.portraits;
-    if(!communicationMouth||!frames||frames.length<2) return;
-    if(index<=0){communicationMouth.style.opacity='0';return;}
-    communicationMouth.src=frames[Math.max(1,Math.min(frames.length-1,index))];
-    communicationMouth.style.opacity='1';
+    if(!communicationPortrait||!frames||!frames.length) return;
+    const source=frames[Math.max(0,Math.min(frames.length-1,index))];
+    setCommunicationPortraitSource(source);
   }
 
   function stopCommunicationBlink(){
     clearTimeout(communicationBlinkTimer);communicationBlinkTimer=0;
     clearTimeout(communicationBlinkStepTimer);communicationBlinkStepTimer=0;
-    if(communicationBlink) communicationBlink.style.opacity='0';
+    if(communicationBlinkActive){communicationBlinkActive=false;setCommunicationMouthFrame(0);}
   }
 
   function scheduleCommunicationBlink(){
     stopCommunicationBlink();
     const contact=COMMUNICATION_CONTACTS[state.communicationContact];
-    if(!communicationBlink||!contact||!contact.blinks||contact.blinks.length<2) return;
+    if(!communicationPortrait||!contact||!contact.blinks||contact.blinks.length<2) return;
     communicationBlinkTimer=setTimeout(()=>{
+      if(communicationUtterance||communicationSpeechPaused){scheduleCommunicationBlink();return;}
       const [half,closed]=contact.blinks;
-      communicationBlink.src=half;communicationBlink.style.opacity='1';
+      communicationBlinkActive=true;setCommunicationPortraitSource(half);
       communicationBlinkStepTimer=setTimeout(()=>{
-        communicationBlink.src=closed;
+        setCommunicationPortraitSource(closed);
         communicationBlinkStepTimer=setTimeout(()=>{
-          communicationBlink.src=half;
-          communicationBlinkStepTimer=setTimeout(()=>{communicationBlink.style.opacity='0';scheduleCommunicationBlink();},65);
+          setCommunicationPortraitSource(half);
+          communicationBlinkStepTimer=setTimeout(()=>{communicationBlinkActive=false;setCommunicationMouthFrame(0);scheduleCommunicationBlink();},65);
         },75);
       },60);
     },2600+Math.random()*3300);
@@ -1271,7 +1288,7 @@
   function startCommunicationMouth(){
     stopCommunicationMouth();
     const contact=COMMUNICATION_CONTACTS[state.communicationContact];
-    if(!communicationMouth||!contact||!contact.portraits||contact.portraits.length<2) return;
+    if(!communicationPortrait||!contact||!contact.portraits||contact.portraits.length<2) return;
     let frame=0;
     const pattern=[1,0,2,1,0,1,2,0];
     communicationMouthTimer=setInterval(()=>{
@@ -1514,9 +1531,7 @@
     if(communicationName) communicationName.textContent=contact.name;
     if(communicationTitle) communicationTitle.textContent=contact.title;
     if(communicationPortrait){communicationPortrait.src=contact.portrait;communicationPortrait.alt=contact.alt;}
-    [...(contact.portraits||[]),...(contact.blinks||[])].forEach(source=>{const frame=new Image();frame.src=source;});
-    if(communicationMouth){communicationMouth.src=contact.portrait;communicationMouth.style.opacity='0';}
-    if(communicationBlink){communicationBlink.src=contact.portrait;communicationBlink.style.opacity='0';}
+    [...(contact.portraits||[]),...(contact.blinks||[])].forEach(preloadCommunicationFrame);
     scheduleCommunicationBlink();
     renderCommunicationNode(nodeId||contact.greeting);
     if(controlsLabel) controlsLabel.textContent='SELECT A RESPONSE — ESC TO END TRANSMISSION';
