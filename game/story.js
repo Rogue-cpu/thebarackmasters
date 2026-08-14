@@ -315,14 +315,28 @@
       const width=readyMaster.naturalWidth,height=readyMaster.naturalHeight;
       const output=document.createElement('canvas');output.width=width;output.height=height;
       const context=output.getContext('2d');context.drawImage(readyMaster,0,0,width,height);
-      context.save();
-      context.beginPath();
-      context.rect(0,height*.1,width*.245,height*.48);
-      context.moveTo(width*.455,0);context.lineTo(width,0);context.lineTo(width,height*.68);context.lineTo(width*.555,height*.67);context.closePath();
-      context.rect(width*.505,height*.63,width*.495,height*.24);
-      context.clip();
-      context.drawImage(readyGenerated,0,0,width,height);
-      context.restore();
+      const patch=document.createElement('canvas');patch.width=width;patch.height=height;
+      const patchContext=patch.getContext('2d');patchContext.drawImage(readyGenerated,0,0,width,height);
+      const mask=document.createElement('canvas');mask.width=width;mask.height=height;
+      const maskContext=mask.getContext('2d');
+      const twinklePatches=[
+        [.136,.199,.018],
+        [.698,.212,.016],
+        [.729,.212,.016],
+        [.795,.128,.019],
+        [.869,.160,.019]
+      ];
+      twinklePatches.forEach(([x,y,r])=>{
+        const radius=width*r;
+        const glow=maskContext.createRadialGradient(width*x,height*y,0,width*x,height*y,radius);
+        glow.addColorStop(0,'rgba(255,255,255,1)');
+        glow.addColorStop(.45,'rgba(255,255,255,.95)');
+        glow.addColorStop(.78,'rgba(255,255,255,.35)');
+        glow.addColorStop(1,'rgba(255,255,255,0)');
+        maskContext.fillStyle=glow;maskContext.beginPath();maskContext.arc(width*x,height*y,radius,0,TWO_PI);maskContext.fill();
+      });
+      patchContext.globalCompositeOperation='destination-in';patchContext.drawImage(mask,0,0);
+      context.drawImage(patch,0,0);
       const prepared=output.toDataURL('image/png');
       communicationBackgroundCache.set(backgroundSource,prepared);
       (contact.portraits||[]).forEach(source=>buildCommunicationComposite(backgroundSource,prepared,source,'mouth'));
@@ -354,13 +368,13 @@
     setCommunicationPortraitSource(contact.portrait);
     const backgrounds=contact.backgrounds||[];
     if(!backgrounds.length) return;
-    const sequence=backgrounds.flatMap(source=>[contact.portrait,source]);
+    const sequence=backgrounds;
     communicationBackgroundTimer=setInterval(()=>{
       const next=sequence[communicationBackgroundIndex++%sequence.length];
       if(next!==contact.portrait&&typeof communicationBackgroundCache.get(next)!=='string') return;
       communicationActiveBackground=next;
       setCommunicationPortraitSource(communicationCurrentFace||contact.portrait);
-    },900);
+    },1250);
   }
   const MINERAL_CATEGORIES = [
     {name:'Common',value:1,weight:30,color:'#8fd8ff',materials:['Hydrogen','Helium','Carbon','Nitrogen','Silicon','Phosphorus','Selenium','Methane','Ammonia','Water']},
